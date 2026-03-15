@@ -1,14 +1,1 @@
-{
-    "version": 2,
-    "name": "codedebt-guardian-ui",
-    "public": true,
-    "builds": [
-      { "src": "ui/**/*", "use": "@vercel/static" }
-    ],
-    "routes": [
-      {
-        "src": "/(.*)",
-        "dest": "/ui/$1"
-      }
-    ]
-}
+{}
