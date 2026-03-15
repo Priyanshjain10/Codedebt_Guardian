@@ -134,6 +134,7 @@ app.include_router(github_router)
 app.include_router(analytics_router)
 app.include_router(ws_router)
 
+
 # Legacy webhook router (GitHub App Debt Gate)
 try:
     from api.webhook import router as webhook_router
@@ -146,7 +147,13 @@ except Exception:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Core Endpoints
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+@app.get("/")
+async def root():
+    return {
+        "service": "CodeDebt Guardian API",
+        "status": "running",
+        "docs": "/api/docs"
+    }
 
 @app.get("/health/live")
 async def health_live():
