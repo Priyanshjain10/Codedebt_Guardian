@@ -34,7 +34,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             const tokens = await authApi.login(data);
-            const user = await authApi.getMe();
+            const user = await authApi.getMe(tokens.access_token);
             login(tokens.access_token, user);
             router.push('/dashboard');
         } catch (err) {
