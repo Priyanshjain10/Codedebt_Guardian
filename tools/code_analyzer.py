@@ -39,7 +39,9 @@ class CodeAnalyzer:
         lines = source_code.split("\n")
         metrics["lines_of_code"] = len(lines)
         metrics["blank_lines"] = sum(1 for line in lines if not line.strip())
-        metrics["comment_lines"] = sum(1 for line in lines if line.strip().startswith("#"))
+        metrics["comment_lines"] = sum(
+            1 for line in lines if line.strip().startswith("#")
+        )
 
         try:
             tree = ast.parse(source_code)

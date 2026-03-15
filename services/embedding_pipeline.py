@@ -12,6 +12,7 @@ from services.ai_gateway import ai_gateway
 
 logger = logging.getLogger(__name__)
 
+
 class CodeChunker:
     """
     Deterministic code chunker.

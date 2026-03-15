@@ -31,6 +31,7 @@ router = APIRouter(prefix="/api/v1/scans", tags=["Scans"])
 
 # ── Rate Limits ──────────────────────────────────────────────────────────
 
+
 def _get_auth_key(request: Request) -> str:
     """Key function for authenticated rate limits — keyed by Bearer token."""
     auth = request.headers.get("Authorization", "")
