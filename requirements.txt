@@ -1,0 +1,61 @@
+# ── Core ─────────────────────────────────────────────────────────────────
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+httpx>=0.25.0
+requests>=2.31.0
+python-multipart>=0.0.9
+gitpython>=3.1.40
+
+# ── Database (PostgreSQL + pgvector) ────────────────────────────────────
+sqlalchemy[asyncio]>=2.0.23
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+pgvector>=0.2.4
+
+# ── Auth & Security ─────────────────────────────────────────────────────
+bcrypt>=4.1.0
+python-jose[cryptography]>=3.3.0
+PyJWT>=2.8.0
+
+# ── Job Queue (Celery + Redis) ──────────────────────────────────────────
+celery[redis]>=5.3.0
+redis>=5.0.0
+
+# ── AI Providers ─────────────────────────────────────────────────────────
+google-generativeai>=0.3.0
+groq>=0.4.0
+openai>=1.6.0
+tiktoken>=0.5.0
+
+# ── Rate Limiting / API ─────────────────────────────────────────────────
+slowapi>=0.1.9
+
+# ── Billing ──────────────────────────────────────────────────────────────
+stripe>=7.0.0
+
+# ── PDF Report Export ────────────────────────────────────────────────────
+weasyprint>=60.0
+
+# ── Code Analysis ────────────────────────────────────────────────────────
+esprima>=4.0.1
+
+# ── Observability ────────────────────────────────────────────────────────
+opentelemetry-api>=1.21.0
+opentelemetry-sdk>=1.21.0
+opentelemetry-instrumentation-fastapi>=0.42b0
+prometheus-client>=0.19.0
+python-json-logger>=2.0.7
+
+# ── Testing ──────────────────────────────────────────────────────────────
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+httpx>=0.25.0
+
+# ── Code Quality ─────────────────────────────────────────────────────────
+ruff>=0.1.0
+mypy>=1.7.0
