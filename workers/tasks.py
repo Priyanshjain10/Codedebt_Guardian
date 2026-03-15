@@ -18,7 +18,7 @@ import redis
 
 from config import settings
 from workers.celery_app import celery_app
-from ..database import SyncSessionLocal
+from database import SyncSessionLocal
 from models.db_models import Scan, Project
 from services.audit import log_action_sync
 
