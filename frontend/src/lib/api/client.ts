@@ -1,5 +1,3 @@
-/* ── Base API Client ──────────────────────────────────────────────────── */
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export class APIError extends Error {
@@ -34,10 +32,7 @@ export async function request<T>(path: string, options: RequestInit = {}, overri
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
     if (res.status === 401) {
-        if (overrideToken) throw new APIError('Unauthorized', 401);
-        if (overrideToken) throw new APIError('Unauthorized', 401);
-        // Auto-logout on auth failure
-        if (typeof window !== 'undefined') {
+        if (!overrideToken && typeof window !== 'undefined') {
             localStorage.removeItem('codedebt-auth');
             window.location.href = '/login';
         }
