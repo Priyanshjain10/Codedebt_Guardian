@@ -15,6 +15,6 @@ export function login(data: { email: string; password: string }) {
     });
 }
 
-export function getMe() {
-    return request<User>('/api/v1/auth/me');
+export function getMe(token?: string) {
+    return request<User>('/api/v1/auth/me', {}, token);
 }
