@@ -31,7 +31,12 @@ export default function RegisterPage() {
         setLoading(true);
         try {
             const tokens = await authApi.register(data);
-            const user = await authApi.getMe(tokens.access_token);
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const meRes = await fetch(`${apiBase}/api/v1/auth/me`, {
+                headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json' }
+            });
+            if (!meRes.ok) throw new Error('Failed to get user profile');
+            const user = await meRes.json();
             login(tokens.access_token, user);
             router.push('/dashboard');
         } catch (err) {
