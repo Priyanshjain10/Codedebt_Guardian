@@ -13,9 +13,9 @@ import * as authApi from '@/lib/api/auth';
 import { useAuthStore } from '@/store/authStore';
 
 const schema = z.object({
-    name: z.string().min(2, 'Name required'),
+    name: z.string().min(2, 'Name must be at least 2 characters'),
     email: z.string().email('Valid email required'),
-    password: z.string().min(6, 'At least 6 characters'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -35,7 +35,9 @@ export default function RegisterPage() {
         setLoading(true);
         try {
             const tokens = await authApi.register(data);
-            const user = await authApi.getMe();
+            // Pass the access_token directly so getMe() can use it
+            // before it's stored in localStorage
+            const user = await authApi.getMe(tokens.access_token);
             login(tokens.access_token, user);
             router.push('/dashboard');
         } catch (err) {
@@ -53,6 +55,7 @@ export default function RegisterPage() {
                 transition={{ duration: 0.2 }}
                 className="w-full max-w-sm"
             >
+                {/* Logo */}
                 <div className="flex items-center gap-2 mb-8 justify-center">
                     <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center">
                         <Zap className="w-5 h-5 text-brand" />
@@ -61,8 +64,8 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="bg-bg-card border border-border rounded-xl p-6">
-                    <h1 className="text-xl font-semibold text-text-1 mb-1">Create your account</h1>
-                    <p className="text-sm text-text-2 mb-6">Start analyzing your codebase in seconds</p>
+                    <h1 className="text-xl font-semibold text-text-1 mb-1">Create account</h1>
+                    <p className="text-sm text-text-2 mb-6">Start managing your technical debt</p>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                         <div>
@@ -72,7 +75,7 @@ export default function RegisterPage() {
                                 type="text"
                                 autoComplete="name"
                                 className="w-full h-9 px-3 rounded-lg bg-bg-input border border-border text-sm text-text-1 placeholder:text-text-3 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand/50 transition-colors"
-                                placeholder="Jane Smith"
+                                placeholder="Your name"
                             />
                             {errors.name && <p className="text-xs text-sev-critical mt-1">{errors.name.message}</p>}
                         </div>
@@ -96,7 +99,7 @@ export default function RegisterPage() {
                                 type="password"
                                 autoComplete="new-password"
                                 className="w-full h-9 px-3 rounded-lg bg-bg-input border border-border text-sm text-text-1 placeholder:text-text-3 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand/50 transition-colors"
-                                placeholder="••••••••"
+                                placeholder="Min 8 characters"
                             />
                             {errors.password && <p className="text-xs text-sev-critical mt-1">{errors.password.message}</p>}
                         </div>

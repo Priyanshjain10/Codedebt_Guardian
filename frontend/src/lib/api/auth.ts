@@ -15,6 +15,8 @@ export function login(data: { email: string; password: string }) {
     });
 }
 
-export function getMe() {
-    return request<User>('/api/v1/auth/me');
+// token param allows calling getMe immediately after login/register
+// before the token is stored in localStorage
+export function getMe(token?: string) {
+    return request<User>('/api/v1/auth/me', {}, token);
 }
