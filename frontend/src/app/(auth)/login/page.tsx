@@ -34,9 +34,7 @@ export default function LoginPage() {
         setLoading(true);
         try {
             const tokens = await authApi.login(data);
-            // Pass the access_token directly so getMe() can use it
-            // before it's stored in localStorage
-            const user = await authApi.getMe(tokens.access_token);
+            const user = await authApi.getMe();
             login(tokens.access_token, user);
             router.push('/dashboard');
         } catch (err) {

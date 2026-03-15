@@ -21,12 +21,8 @@ function getToken(): string | null {
     }
 }
 
-export async function request<T>(
-    path: string,
-    options: RequestInit = {},
-    overrideToken?: string,
-): Promise<T> {
-    const token = overrideToken ?? getToken();
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const token = getToken();
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string> ?? {}),
@@ -38,9 +34,8 @@ export async function request<T>(
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
     if (res.status === 401) {
-        // Auto-logout on auth failure — but only if no overrideToken
-        // (overrideToken means we're in the middle of login, don't redirect yet)
-        if (!overrideToken && typeof window !== 'undefined') {
+        // Auto-logout on auth failure
+        if (typeof window !== 'undefined') {
             localStorage.removeItem('codedebt-auth');
             window.location.href = '/login';
         }
