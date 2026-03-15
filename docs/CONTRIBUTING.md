@@ -1,6 +1,6 @@
 # Contributing to CodeDebt Guardian
 
-Thank you for your interest in contributing to CodeDebt Guardian! This project is part of the 5-Day AI Agents Intensive Course capstone.
+Thank you for your interest in contributing to CodeDebt Guardian!
 
 ## 🤝 How to Contribute
 
