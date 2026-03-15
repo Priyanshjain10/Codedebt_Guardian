@@ -8,9 +8,14 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from models.schemas import (
-    CodeLocation, TechnicalDebt, FixProposal, PullRequestInfo,
-    RepoMetadata, DetectionResult, AnalysisSummary, AnalysisReport,
-    DebtSeverity, DebtCategory, EffortLevel, Priority, DetectionSource,
+    CodeLocation,
+    TechnicalDebt,
+    FixProposal,
+    PullRequestInfo,
+    AnalysisSummary,
+    AnalysisReport,
+    DebtSeverity,
+    EffortLevel,
 )
 
 
@@ -174,7 +179,12 @@ class TestPullRequestInfo:
 
     def test_invalid_pr_number(self):
         with pytest.raises(ValidationError):
-            PullRequestInfo(number=0, title="t", html_url="https://github.com/x/y/pull/0", branch="b")
+            PullRequestInfo(
+                number=0,
+                title="t",
+                html_url="https://github.com/x/y/pull/0",
+                branch="b",
+            )
 
 
 class TestAnalysisSummary:
@@ -220,9 +230,11 @@ class TestDebtDetectionAgentTypedConversion:
 
     def setup_method(self):
         import sys
+
         sys.path.insert(0, ".")
         from agents.debt_detection_agent import DebtDetectionAgent
         from tools.memory_bank import MemoryBank
+
         self.agent = DebtDetectionAgent(memory=MemoryBank())
 
     def test_converts_valid_dict(self):
@@ -265,9 +277,24 @@ class TestDebtDetectionAgentTypedConversion:
 
     def test_batch_conversion_skips_invalid(self):
         raw_issues = [
-            {"type": "bare_except", "description": "desc", "severity": "MEDIUM", "location": "x.py:1"},
-            {"type": "bad_issue", "description": "", "severity": "LOW", "location": "y.py:2"},  # empty desc
-            {"type": "long_method", "description": "long func", "severity": "HIGH", "location": "z.py:3"},
+            {
+                "type": "bare_except",
+                "description": "desc",
+                "severity": "MEDIUM",
+                "location": "x.py:1",
+            },
+            {
+                "type": "bad_issue",
+                "description": "",
+                "severity": "LOW",
+                "location": "y.py:2",
+            },  # empty desc
+            {
+                "type": "long_method",
+                "description": "long func",
+                "severity": "HIGH",
+                "location": "z.py:3",
+            },
         ]
         results = self.agent.to_typed_results(raw_issues)
         # Empty description should be skipped, valid ones kept

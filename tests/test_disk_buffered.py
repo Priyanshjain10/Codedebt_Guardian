@@ -6,7 +6,6 @@ Verifies that GitHubTool.read_file_content() correctly reads from disk
 
 import os
 import tempfile
-import pytest
 from tools.github_tool import GitHubTool
 
 
@@ -43,7 +42,11 @@ class TestDiskBufferedReads:
 
     def test_returns_empty_on_missing_file(self, tmp_path):
         """Returns empty string when local_path points to a nonexistent file."""
-        file_info = {"name": "ghost.py", "local_path": str(tmp_path / "nonexistent.py"), "size": 0}
+        file_info = {
+            "name": "ghost.py",
+            "local_path": str(tmp_path / "nonexistent.py"),
+            "size": 0,
+        }
         content = GitHubTool.read_file_content(file_info)
 
         assert content == ""

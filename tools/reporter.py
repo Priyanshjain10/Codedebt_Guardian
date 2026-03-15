@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 # ANSI color codes for terminal output
 COLORS = {
     "CRITICAL": "\033[91m",  # Red
-    "HIGH": "\033[93m",      # Yellow
-    "MEDIUM": "\033[94m",    # Blue
-    "LOW": "\033[92m",       # Green
+    "HIGH": "\033[93m",  # Yellow
+    "MEDIUM": "\033[94m",  # Blue
+    "LOW": "\033[92m",  # Green
     "RESET": "\033[0m",
     "BOLD": "\033[1m",
     "DIM": "\033[2m",
@@ -50,7 +50,9 @@ class ReportGenerator:
         """
         summary = {
             "total_issues": detection_results.get("total_issues", 0),
-            "critical": sum(1 for i in ranked_results if i.get("priority") == "CRITICAL"),
+            "critical": sum(
+                1 for i in ranked_results if i.get("priority") == "CRITICAL"
+            ),
             "high": sum(1 for i in ranked_results if i.get("priority") == "HIGH"),
             "medium": sum(1 for i in ranked_results if i.get("priority") == "MEDIUM"),
             "low": sum(1 for i in ranked_results if i.get("priority") == "LOW"),
@@ -62,7 +64,8 @@ class ReportGenerator:
         # Estimated hours saved (rough heuristic)
         effort_map = {"CRITICAL": 8, "HIGH": 4, "MEDIUM": 2, "LOW": 0.5}
         estimated_hours_saved = sum(
-            effort_map.get(i.get("priority", "LOW"), 1) * 0.6  # 60% time saving estimate
+            effort_map.get(i.get("priority", "LOW"), 1)
+            * 0.6  # 60% time saving estimate
             for i in ranked_results
             if i.get("priority") in ["CRITICAL", "HIGH"]
         )
@@ -99,7 +102,7 @@ class ReportGenerator:
         B = COLORS["BOLD"]
         R = COLORS["RESET"]
         C = COLORS["CYAN"]
-        M = COLORS["MAGENTA"]
+        COLORS["MAGENTA"]
         D = COLORS["DIM"]
 
         print(f"\n{B}📊 ANALYSIS COMPLETE{R}")
@@ -109,15 +112,29 @@ class ReportGenerator:
 
         # Summary box
         print(f"{B}┌─ DEBT SUMMARY {'─' * 42}┐{R}")
-        print(f"│  Total Issues Found:    {B}{summary['total_issues']:>4}{R}                           │")
-        print(f"│  Files Scanned:         {B}{summary['files_scanned']:>4}{R}                           │")
-        print(f"│                                                       │")
-        print(f"│  {COLORS['CRITICAL']}🔴 CRITICAL: {summary['critical']:>3}{R}    {COLORS['HIGH']}🟠 HIGH: {summary['high']:>3}{R}                │")
-        print(f"│  {COLORS['MEDIUM']}🟡 MEDIUM:   {summary['medium']:>3}{R}    {COLORS['LOW']}🟢 LOW:  {summary['low']:>3}{R}                │")
-        print(f"│                                                       │")
-        print(f"│  ⚡ Quick Wins:         {B}{summary['quick_wins']:>4}{R}                           │")
-        print(f"│  🔧 Fix Proposals:      {B}{summary['fixes_proposed']:>4}{R}                           │")
-        print(f"│  ⏱️  Est. Hours Saved:   {B}{summary['estimated_hours_saved']:>4.1f}{R}                           │")
+        print(
+            f"│  Total Issues Found:    {B}{summary['total_issues']:>4}{R}                           │"
+        )
+        print(
+            f"│  Files Scanned:         {B}{summary['files_scanned']:>4}{R}                           │"
+        )
+        print("│                                                       │")
+        print(
+            f"│  {COLORS['CRITICAL']}🔴 CRITICAL: {summary['critical']:>3}{R}    {COLORS['HIGH']}🟠 HIGH: {summary['high']:>3}{R}                │"
+        )
+        print(
+            f"│  {COLORS['MEDIUM']}🟡 MEDIUM:   {summary['medium']:>3}{R}    {COLORS['LOW']}🟢 LOW:  {summary['low']:>3}{R}                │"
+        )
+        print("│                                                       │")
+        print(
+            f"│  ⚡ Quick Wins:         {B}{summary['quick_wins']:>4}{R}                           │"
+        )
+        print(
+            f"│  🔧 Fix Proposals:      {B}{summary['fixes_proposed']:>4}{R}                           │"
+        )
+        print(
+            f"│  ⏱️  Est. Hours Saved:   {B}{summary['estimated_hours_saved']:>4.1f}{R}                           │"
+        )
         print(f"{B}└{'─' * 55}┘{R}")
 
         # Top issues
@@ -133,7 +150,9 @@ class ReportGenerator:
                 location = issue.get("location", "unknown")[:35]
                 desc = issue.get("description", "")[:50]
                 quick_win = " ⚡" if issue.get("quick_win") else ""
-                print(f"  {i:>2}. {color}{icon} [{priority:<8}]{R} Score:{B}{score:>3}{R}{quick_win}")
+                print(
+                    f"  {i:>2}. {color}{icon} [{priority:<8}]{R} Score:{B}{score:>3}{R}{quick_win}"
+                )
                 print(f"      {D}{location}{R}")
                 print(f"      {desc}...")
                 print()
@@ -144,9 +163,13 @@ class ReportGenerator:
             print(f"{B}🔧 FIX PROPOSALS GENERATED{R}")
             print("─" * 60)
             for fix in fixes[:5]:
-                print(f"  ✅ {fix.get('issue_type', 'Unknown')} — {fix.get('fix_summary', '')[:60]}")
+                print(
+                    f"  ✅ {fix.get('issue_type', 'Unknown')} — {fix.get('fix_summary', '')[:60]}"
+                )
             if len(fixes) > 5:
-                print(f"  {D}... and {len(fixes) - 5} more. Use --save to get full report.{R}")
+                print(
+                    f"  {D}... and {len(fixes) - 5} more. Use --save to get full report.{R}"
+                )
 
         print(f"\n{C}💡 Run with --save to export full JSON report{R}")
         print(f"{C}🌐 Run with --ui to explore in the web interface{R}\n")
@@ -154,10 +177,12 @@ class ReportGenerator:
     def _print_simple(self, report: Dict) -> None:
         """Print a plain text summary."""
         summary = report["summary"]
-        print(f"CodeDebt Guardian Report")
+        print("CodeDebt Guardian Report")
         print(f"Repo: {report['meta']['repo_url']}")
         print(f"Total Issues: {summary['total_issues']}")
-        print(f"Critical: {summary['critical']} | High: {summary['high']} | Medium: {summary['medium']} | Low: {summary['low']}")
+        print(
+            f"Critical: {summary['critical']} | High: {summary['high']} | Medium: {summary['medium']} | Low: {summary['low']}"
+        )
         print(f"Quick Wins: {summary['quick_wins']}")
         print(f"Fix Proposals: {summary['fixes_proposed']}")
         print(f"Estimated Hours Saved: {summary['estimated_hours_saved']}")

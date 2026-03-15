@@ -3,14 +3,14 @@
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
+from database import Base
+from models.db_models import *  # noqa: F403
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import all models so Alembic can detect them
-from database import Base
-from models.db_models import *  # noqa: F403
 
 target_metadata = Base.metadata
 

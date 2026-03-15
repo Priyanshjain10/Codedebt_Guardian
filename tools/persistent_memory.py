@@ -86,10 +86,13 @@ class PersistentMemoryBank:
         expires_at = now + ttl_seconds if ttl_seconds else None
         value_str = json.dumps(value, default=str)
 
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT OR REPLACE INTO memory (key, value, created_at, expires_at)
             VALUES (?, ?, ?, ?)
-        """, (key, value_str, now, expires_at))
+        """,
+            (key, value_str, now, expires_at),
+        )
         self._conn.commit()
         logger.debug(f"Persisted: {key} (TTL: {ttl_seconds}s)")
 
@@ -103,27 +106,35 @@ class PersistentMemoryBank:
 
     def save_analysis_history(self, repo_url: str, branch: str, summary: Dict) -> None:
         """Save an analysis result to history."""
-        self._conn.execute("""
+        self._conn.execute(
+            """
             INSERT INTO analysis_history (repo_url, branch, analyzed_at, total_issues, critical, high, summary)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            repo_url, branch, time.time(),
-            summary.get("total_issues", 0),
-            summary.get("critical", 0),
-            summary.get("high", 0),
-            json.dumps(summary, default=str),
-        ))
+        """,
+            (
+                repo_url,
+                branch,
+                time.time(),
+                summary.get("total_issues", 0),
+                summary.get("critical", 0),
+                summary.get("high", 0),
+                json.dumps(summary, default=str),
+            ),
+        )
         self._conn.commit()
 
     def get_analysis_history(self, repo_url: str, limit: int = 10) -> list:
         """Get past analysis results for a repo."""
-        rows = self._conn.execute("""
+        rows = self._conn.execute(
+            """
             SELECT repo_url, branch, analyzed_at, total_issues, critical, high, summary
             FROM analysis_history
             WHERE repo_url = ?
             ORDER BY analyzed_at DESC
             LIMIT ?
-        """, (repo_url, limit)).fetchall()
+        """,
+            (repo_url, limit),
+        ).fetchall()
 
         return [
             {
@@ -140,23 +151,34 @@ class PersistentMemoryBank:
 
     def get_all_history(self, limit: int = 50) -> list:
         """Get all analysis history across all repos."""
-        rows = self._conn.execute("""
+        rows = self._conn.execute(
+            """
             SELECT repo_url, branch, analyzed_at, total_issues, critical, high
             FROM analysis_history
             ORDER BY analyzed_at DESC
             LIMIT ?
-        """, (limit,)).fetchall()
+        """,
+            (limit,),
+        ).fetchall()
 
         return [
-            {"repo_url": r[0], "branch": r[1], "analyzed_at": r[2],
-             "total_issues": r[3], "critical": r[4], "high": r[5]}
+            {
+                "repo_url": r[0],
+                "branch": r[1],
+                "analyzed_at": r[2],
+                "total_issues": r[3],
+                "critical": r[4],
+                "high": r[5],
+            }
             for r in rows
         ]
 
     def stats(self) -> Dict:
         total = self._hits + self._misses
         cached_rows = self._conn.execute("SELECT COUNT(*) FROM memory").fetchone()[0]
-        history_rows = self._conn.execute("SELECT COUNT(*) FROM analysis_history").fetchone()[0]
+        history_rows = self._conn.execute(
+            "SELECT COUNT(*) FROM analysis_history"
+        ).fetchone()[0]
         return {
             "total_keys": cached_rows,
             "analysis_history_count": history_rows,

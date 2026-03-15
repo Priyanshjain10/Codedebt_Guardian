@@ -4,7 +4,6 @@ Multi-tenant org management, team CRUD, member invitations.
 """
 
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -136,12 +135,13 @@ async def list_team_members(
                     "name": m.user.name,
                     "email": m.user.email,
                     "avatar_url": m.user.avatar_url,
-                } if m.user else None
+                }
+                if m.user
+                else None,
             }
             for m in members
         ]
     }
-
 
 
 @router.post("/{org_id}/teams/{team_id}/members")

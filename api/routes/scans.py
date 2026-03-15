@@ -5,7 +5,6 @@ CRUD for scans: trigger, list, get results, create PRs, export CTO reports.
 
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -21,14 +20,16 @@ from database import get_db
 from models.db_models import Scan, Project, User, TeamMember, Team, Subscription
 from services.audit import log_action
 
+from api.rate_limit import limiter
+
+from slowapi.util import get_remote_address
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/scans", tags=["Scans"])
 
 
 # ── Rate Limits ──────────────────────────────────────────────────────────
-
-from api.rate_limit import limiter
-
 
 def _get_auth_key(request: Request) -> str:
     """Key function for authenticated rate limits — keyed by Bearer token."""
@@ -38,10 +39,8 @@ def _get_auth_key(request: Request) -> str:
     return get_remote_address(request)
 
 
-from slowapi.util import get_remote_address
-
-
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _parse_scan_uuid(scan_id: str) -> UUID:
     """Parse scan_id string to UUID, raising 404 (not 500) on bad format."""
@@ -52,6 +51,7 @@ def _parse_scan_uuid(scan_id: str) -> UUID:
 
 
 # ── Request / Response Models ─────────────────────────────────────────────
+
 
 class CreateScanRequest(BaseModel):
     repo_url: str
@@ -75,6 +75,7 @@ class ScanResponse(BaseModel):
 
 # ── Quota Enforcement ─────────────────────────────────────────────────────
 
+
 async def check_scan_quota(org_id: UUID, db: AsyncSession) -> None:
     """Raise 402 if the org has hit their monthly scan limit."""
     result = await db.execute(
@@ -91,8 +92,10 @@ async def check_scan_quota(org_id: UUID, db: AsyncSession) -> None:
                 "error": "scan_limit_exceeded",
                 "message": f"Monthly scan limit of {sub.scans_limit_monthly} reached.",
                 "upgrade_url": "/settings/billing",
-                "resets_at": sub.current_period_end.isoformat() if sub.current_period_end else None,
-            }
+                "resets_at": sub.current_period_end.isoformat()
+                if sub.current_period_end
+                else None,
+            },
         )
     if sub:
         sub.scans_used += 1
@@ -100,6 +103,7 @@ async def check_scan_quota(org_id: UUID, db: AsyncSession) -> None:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
+
 
 @router.post("", status_code=202)
 @limiter.limit("5/minute")
@@ -119,9 +123,11 @@ async def create_scan(
 
     membership = None
     if user:
-        membership = (await db.execute(
-            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-        )).scalar_one_or_none()
+        membership = (
+            await db.execute(
+                select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+            )
+        ).scalar_one_or_none()
 
     org_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
@@ -132,9 +138,9 @@ async def create_scan(
 
     elif membership:
         # Derive org / create implicit project when the user belongs to a team
-        team = (await db.execute(
-            select(Team).where(Team.id == membership.team_id)
-        )).scalar_one()
+        team = (
+            await db.execute(select(Team).where(Team.id == membership.team_id))
+        ).scalar_one()
         org_id = team.org_id
 
         # Enforce scan quota only when we have an org
@@ -153,7 +159,7 @@ async def create_scan(
     elif user:
         raise HTTPException(
             status_code=400,
-            detail="You must belong to a team, or explicitly supply a project_id."
+            detail="You must belong to a team, or explicitly supply a project_id.",
         )
     else:
         # Unauthenticated direct scan
@@ -175,16 +181,27 @@ async def create_scan(
 
     # Audit log
     if org_id:
-        await log_action(db, org_id, user.id, "scan.created", {
-            "scan_id": scan_id, "repo_url": req.repo_url, "branch": req.branch,
-        })
+        await log_action(
+            db,
+            org_id,
+            user.id,
+            "scan.created",
+            {
+                "scan_id": scan_id,
+                "repo_url": req.repo_url,
+                "branch": req.branch,
+            },
+        )
 
     # Enqueue Celery task (graceful fallback to in-process for dev)
     try:
         from workers.tasks import run_scan_analysis
+
         run_scan_analysis.delay(scan_id, req.repo_url, req.branch)
     except Exception as celery_err:
-        logger.warning(f"Celery unavailable ({celery_err}), marking scan as running for manual trigger")
+        logger.warning(
+            f"Celery unavailable ({celery_err}), marking scan as running for manual trigger"
+        )
         scan.status = "running"
         await db.flush()
 
@@ -222,9 +239,9 @@ async def list_scans(
                 "id": str(s.id),
                 "status": s.status,
                 "branch": s.branch,
-                "scan_type": getattr(s, 'scan_type', 'repo') or 'repo',
-                "pr_number": getattr(s, 'pr_number', None),
-                "debt_score": getattr(s, 'debt_score', None),
+                "scan_type": getattr(s, "scan_type", "repo") or "repo",
+                "pr_number": getattr(s, "pr_number", None),
+                "debt_score": getattr(s, "debt_score", None),
                 "summary": s.summary or {},
                 "duration_seconds": s.duration_seconds,
                 "created_at": s.created_at.isoformat() if s.created_at else "",
@@ -260,9 +277,9 @@ async def get_latest_scan(
         "id": str(scan.id),
         "status": scan.status,
         "branch": scan.branch,
-        "scan_type": getattr(scan, 'scan_type', 'repo') or 'repo',
-        "pr_number": getattr(scan, 'pr_number', None),
-        "debt_score": getattr(scan, 'debt_score', None),
+        "scan_type": getattr(scan, "scan_type", "repo") or "repo",
+        "pr_number": getattr(scan, "pr_number", None),
+        "debt_score": getattr(scan, "debt_score", None),
         "summary": scan.summary or {},
         "detection": scan.detection_results or {},
         "ranked_issues": scan.ranked_issues or [],
@@ -273,6 +290,7 @@ async def get_latest_scan(
         "created_at": scan.created_at.isoformat() if scan.created_at else "",
         "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
     }
+
 
 @router.get("/pull-requests")
 async def list_pull_requests(
@@ -311,9 +329,9 @@ async def get_scan(
         "id": str(scan.id),
         "status": scan.status,
         "branch": scan.branch,
-        "scan_type": getattr(scan, 'scan_type', 'repo') or 'repo',
-        "pr_number": getattr(scan, 'pr_number', None),
-        "debt_score": getattr(scan, 'debt_score', None),
+        "scan_type": getattr(scan, "scan_type", "repo") or "repo",
+        "pr_number": getattr(scan, "pr_number", None),
+        "debt_score": getattr(scan, "debt_score", None),
         "summary": scan.summary or {},
         "detection": scan.detection_results or {},
         "ranked_issues": scan.ranked_issues or [],
@@ -350,7 +368,7 @@ async def get_scan_report(
     if scan.status != "completed":
         raise HTTPException(
             status_code=400,
-            detail=f"Scan not yet completed (current status: {scan.status})"
+            detail=f"Scan not yet completed (current status: {scan.status})",
         )
 
     # Build analysis dict that CTOReportGenerator expects
@@ -365,12 +383,15 @@ async def get_scan_report(
 
     try:
         from tools.cto_report import CTOReportGenerator
+
         html_content = CTOReportGenerator().generate(
             analysis_data,
             repo_url=scan.project.repo_url if scan.project else "",
         )
     except Exception as e:
-        logger.error(f"CTOReportGenerator failed for scan {scan_id}: {e}", exc_info=True)
+        logger.error(
+            f"CTOReportGenerator failed for scan {scan_id}: {e}", exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
 
     if format == "html":
@@ -379,6 +400,7 @@ async def get_scan_report(
     # PDF rendering — try weasyprint, fall back gracefully to HTML
     try:
         from weasyprint import HTML as WeasyHTML
+
         pdf_bytes = WeasyHTML(string=html_content).write_pdf()
         return Response(
             content=pdf_bytes,
@@ -397,7 +419,10 @@ async def get_scan_report(
         logger.warning(f"PDF rendering failed: {pdf_err} — returning HTML fallback")
         return HTMLResponse(
             content=html_content,
-            headers={"X-Report-Format": "html-fallback", "X-PDF-Error": str(pdf_err)[:200]},
+            headers={
+                "X-Report-Format": "html-fallback",
+                "X-PDF-Error": str(pdf_err)[:200],
+            },
         )
 
 
@@ -422,29 +447,34 @@ async def create_fix_pr(
         raise HTTPException(status_code=400, detail="Scan not completed yet")
 
     # ── Phase 4.3: Enforce auto-PR plan gate ────────────────────────────
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     if membership:
-        team = (await db.execute(
-            select(Team).where(Team.id == membership.team_id)
-        )).scalar_one()
-        sub = (await db.execute(
-            select(Subscription)
-            .where(
-                Subscription.org_id == team.org_id,
-                Subscription.status == "active",
+        team = (
+            await db.execute(select(Team).where(Team.id == membership.team_id))
+        ).scalar_one()
+        sub = (
+            await db.execute(
+                select(Subscription)
+                .where(
+                    Subscription.org_id == team.org_id,
+                    Subscription.status == "active",
+                )
+                .limit(1)
             )
-            .limit(1)
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
         plan = sub.plan if sub else "free"
 
         from config import settings
+
         if not settings.PLAN_LIMITS.get(plan, {}).get("auto_prs", False):
             raise HTTPException(
                 status_code=402,
-                detail="Auto-fix PRs require Pro plan. Upgrade at /settings/billing."
+                detail="Auto-fix PRs require Pro plan. Upgrade at /settings/billing.",
             )
 
     fixes = scan.fix_proposals or []
@@ -453,16 +483,16 @@ async def create_fix_pr(
     if fix_index >= len(fixes):
         raise HTTPException(
             status_code=400,
-            detail=f"Fix index {fix_index} out of range (scan has {len(fixes)} fixes)"
+            detail=f"Fix index {fix_index} out of range (scan has {len(fixes)} fixes)",
         )
 
     fix = fixes[fix_index]
     issue = ranked[fix_index] if fix_index < len(ranked) else {}
 
     # Get repo URL from project
-    project = (await db.execute(
-        select(Project).where(Project.id == scan.project_id)
-    )).scalar_one_or_none()
+    project = (
+        await db.execute(select(Project).where(Project.id == scan.project_id))
+    ).scalar_one_or_none()
     repo_url = project.repo_url if project else ""
 
     if not repo_url:
@@ -470,9 +500,15 @@ async def create_fix_pr(
 
     try:
         from tools.pr_generator import PRGenerator
-        pr = PRGenerator().create_fix_pr(repo_url=repo_url, fix_proposal=fix, issue=issue)
+
+        pr = PRGenerator().create_fix_pr(
+            repo_url=repo_url, fix_proposal=fix, issue=issue
+        )
         if not pr:
-            return {"status": "skipped", "message": "This issue type cannot be auto-fixed"}
+            return {
+                "status": "skipped",
+                "message": "This issue type cannot be auto-fixed",
+            }
         return {
             "status": "created",
             "pr_url": pr.get("html_url") or pr.get("url"),
@@ -480,5 +516,7 @@ async def create_fix_pr(
             "title": pr.get("title", ""),
         }
     except Exception as e:
-        logger.error(f"PR creation failed for scan {scan_id} fix {fix_index}: {e}", exc_info=True)
+        logger.error(
+            f"PR creation failed for scan {scan_id} fix {fix_index}: {e}", exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"PR creation failed: {str(e)}")

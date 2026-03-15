@@ -3,8 +3,8 @@ CTO Report Generator — translates technical debt into business language.
 Produces a boardroom-ready HTML report for non-technical executives.
 No other tool does this.
 """
+
 import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -41,24 +41,38 @@ class CTOReportGenerator:
         silos = results.get("knowledge_silos", [])
 
         critical = [i for i in issues if i.get("severity") == "CRITICAL"]
-        high     = [i for i in issues if i.get("severity") == "HIGH"]
-        medium   = [i for i in issues if i.get("severity") == "MEDIUM"]
-        low      = [i for i in issues if i.get("severity") == "LOW"]
+        high = [i for i in issues if i.get("severity") == "HIGH"]
+        medium = [i for i in issues if i.get("severity") == "MEDIUM"]
+        [i for i in issues if i.get("severity") == "LOW"]
 
         # Financial summary
         debt_data = results.get("debt_interest", {})
-        current_cost = debt_data.get("total_current_cost_usd", self._estimate_cost(issues))
-        future_cost  = debt_data.get("total_future_cost_usd",  round(current_cost * 1.23))
-        savings      = future_cost - current_cost
+        current_cost = debt_data.get(
+            "total_current_cost_usd", self._estimate_cost(issues)
+        )
+        future_cost = debt_data.get("total_future_cost_usd", round(current_cost * 1.23))
+        savings = future_cost - current_cost
 
         # Sprint impact
         sprint_hours = self._sprint_hours(issues)
         sprints_affected = self._sprints_affected(issues)
 
         # Risk level
-        risk = "CRITICAL" if critical else "HIGH" if high else "MEDIUM" if medium else "LOW"
-        risk_color = {"CRITICAL": "#ef4444", "HIGH": "#f97316",
-                      "MEDIUM": "#f59e0b", "LOW": "#22c55e"}[risk]
+        risk = (
+            "CRITICAL"
+            if critical
+            else "HIGH"
+            if high
+            else "MEDIUM"
+            if medium
+            else "LOW"
+        )
+        risk_color = {
+            "CRITICAL": "#ef4444",
+            "HIGH": "#f97316",
+            "MEDIUM": "#f59e0b",
+            "LOW": "#22c55e",
+        }[risk]
 
         # Top 3 actions
         actions = self._top_actions(issues, hotspots, silos)
@@ -67,15 +81,19 @@ class CTOReportGenerator:
         type_summary = self._business_summary(issues)
 
         # Executive summary text
-        exec_summary = self._executive_summary(issues, sprint_hours, current_cost, hotspots, silos)
+        exec_summary = self._executive_summary(
+            issues, sprint_hours, current_cost, hotspots, silos
+        )
 
         # Assemble HTML from modular sections
-        html = "<!DOCTYPE html>\n<html lang=\"en\">\n"
+        html = '<!DOCTYPE html>\n<html lang="en">\n'
         html += self._build_html_head(repo_name, risk_color)
         html += "<body>\n\n"
         html += self._build_header(repo_name, date, len(issues))
         html += self._build_risk_banner(risk, risk_color, exec_summary)
-        html += self._build_metrics_grid(len(critical), len(high), sprint_hours, sprints_affected)
+        html += self._build_metrics_grid(
+            len(critical), len(high), sprint_hours, sprints_affected
+        )
         html += self._build_cost_section(current_cost, future_cost, savings)
         html += self._build_business_section(type_summary)
         html += self._build_actions_section(actions)
@@ -389,8 +407,9 @@ class CTOReportGenerator:
 
 """
 
-    def _build_metrics_grid(self, critical_n: int, high_n: int,
-                            sprint_hours: int, sprints_affected: int) -> str:
+    def _build_metrics_grid(
+        self, critical_n: int, high_n: int, sprint_hours: int, sprints_affected: int
+    ) -> str:
         """Build the 4-card metrics summary grid.
 
         Args:
@@ -423,8 +442,9 @@ class CTOReportGenerator:
 
 """
 
-    def _build_cost_section(self, current_cost: float, future_cost: float,
-                            savings: float) -> str:
+    def _build_cost_section(
+        self, current_cost: float, future_cost: float, savings: float
+    ) -> str:
         """Build the financial impact section with cost comparison cards.
 
         Args:
@@ -486,7 +506,7 @@ class CTOReportGenerator:
             HTML string for the actions section.
         """
         rows = "".join(
-            f'<div class="action-item"><div class="action-num">{i+1}</div>'
+            f'<div class="action-item"><div class="action-num">{i + 1}</div>'
             f'<div><div class="action-title">{a["title"]}</div>'
             f'<div class="action-desc">{a["desc"]}</div></div></div>'
             for i, a in enumerate(actions)
@@ -557,8 +577,8 @@ class CTOReportGenerator:
             Number of affected sprints (minimum 1).
         """
         files = set(
-            i.get("location", {}).get("file_path", "").split(":")[0] 
-            if isinstance(i.get("location"), dict) 
+            i.get("location", {}).get("file_path", "").split(":")[0]
+            if isinstance(i.get("location"), dict)
             else str(i.get("location", "")).split(":")[0]
             for i in issues
         )
@@ -583,13 +603,19 @@ class CTOReportGenerator:
         """
         parts = []
         if issues:
-            parts.append(f"Your codebase has {len(issues)} technical debt issues "
-                        f"costing your team approximately {sprint_hours} hours per sprint.")
+            parts.append(
+                f"Your codebase has {len(issues)} technical debt issues "
+                f"costing your team approximately {sprint_hours} hours per sprint."
+            )
         if hotspots:
-            parts.append(f"{len(hotspots)} files are high-risk hotspots — "
-                        f"complex code that changes frequently.")
+            parts.append(
+                f"{len(hotspots)} files are high-risk hotspots — "
+                f"complex code that changes frequently."
+            )
         if silos:
-            parts.append(f"{len(silos)} files are known only to one developer (bus factor: 1).")
+            parts.append(
+                f"{len(silos)} files are known only to one developer (bus factor: 1)."
+            )
         if cost:
             parts.append(f"Total remediation cost today: ${cost:,.0f}.")
         return " ".join(parts) if parts else "No significant debt detected."
@@ -613,27 +639,34 @@ class CTOReportGenerator:
             type_counts[t] = type_counts.get(t, 0) + 1
 
         business_lang = {
-            "hardcoded_password": ("Security credentials in source code",
-                                   "compliance risk, potential breach"),
-            "long_method":        ("Overly complex functions",
-                                   "slow onboarding, high bug risk"),
-            "god_class":          ("Monolithic modules",
-                                   "blocks parallel development"),
-            "missing_docstring":  ("Undocumented code",
-                                   "increases onboarding time by 40%"),
-            "bare_except":        ("Silent error suppression",
-                                   "bugs hidden until production"),
-            "console_log":        ("Debug code in production",
-                                   "performance and security risk"),
-            "callback_hell":      ("Deeply nested async code",
-                                   "high maintenance cost"),
+            "hardcoded_password": (
+                "Security credentials in source code",
+                "compliance risk, potential breach",
+            ),
+            "long_method": (
+                "Overly complex functions",
+                "slow onboarding, high bug risk",
+            ),
+            "god_class": ("Monolithic modules", "blocks parallel development"),
+            "missing_docstring": (
+                "Undocumented code",
+                "increases onboarding time by 40%",
+            ),
+            "bare_except": ("Silent error suppression", "bugs hidden until production"),
+            "console_log": (
+                "Debug code in production",
+                "performance and security risk",
+            ),
+            "callback_hell": ("Deeply nested async code", "high maintenance cost"),
         }
 
         result = {}
-        for itype, count in sorted(type_counts.items(),
-                                   key=lambda x: x[1], reverse=True)[:5]:
-            label, impact = business_lang.get(itype,
-                (itype.replace("_", " ").title(), "technical risk"))
+        for itype, count in sorted(
+            type_counts.items(), key=lambda x: x[1], reverse=True
+        )[:5]:
+            label, impact = business_lang.get(
+                itype, (itype.replace("_", " ").title(), "technical risk")
+            )
             result[f"{label} ({count} instances)"] = f"Impact: {impact}"
         return result
 
@@ -660,34 +693,50 @@ class CTOReportGenerator:
                 else str(i.get("location", "")).split(":")[0]
                 for i in critical
             )
-            actions.append({
-                "title": f"Fix {len(critical)} critical security issue(s) immediately",
-                "desc": (f"Hardcoded credentials and critical bugs in "
+            actions.append(
+                {
+                    "title": f"Fix {len(critical)} critical security issue(s) immediately",
+                    "desc": (
+                        f"Hardcoded credentials and critical bugs in "
                         f"{locations}. "
-                        f"These are compliance and security risks.")
-            })
+                        f"These are compliance and security risks."
+                    ),
+                }
+            )
         if hotspots:
             h = hotspots[0]
-            actions.append({
-                "title": f"Refactor hotspot: {h.get('filepath','')}",
-                "desc": (f"This file has a hotspot score of {h.get('hotspot_score',0):.0f} "
-                        f"— changed {h.get('commits_90d',0)}x in 90 days with high complexity. "
-                        f"Schedule 1 sprint for refactoring.")
-            })
+            actions.append(
+                {
+                    "title": f"Refactor hotspot: {h.get('filepath', '')}",
+                    "desc": (
+                        f"This file has a hotspot score of {h.get('hotspot_score', 0):.0f} "
+                        f"— changed {h.get('commits_90d', 0)}x in 90 days with high complexity. "
+                        f"Schedule 1 sprint for refactoring."
+                    ),
+                }
+            )
         if silos:
             s = silos[0]
-            actions.append({
-                "title": f"Document knowledge silo: {s.get('filepath','')}",
-                "desc": (f"Only {s.get('sole_author','')} understands this file. "
-                        f"Schedule pair programming and documentation before this becomes a risk.")
-            })
+            actions.append(
+                {
+                    "title": f"Document knowledge silo: {s.get('filepath', '')}",
+                    "desc": (
+                        f"Only {s.get('sole_author', '')} understands this file. "
+                        f"Schedule pair programming and documentation before this becomes a risk."
+                    ),
+                }
+            )
         high = [i for i in issues if i.get("severity") == "HIGH"]
         if high and len(actions) < 3:
-            actions.append({
-                "title": f"Address {len(high)} high-priority issues this quarter",
-                "desc": ("Long methods and complex classes that slow down "
-                        "every feature delivery. Allocate 20% of sprint capacity to debt reduction.")
-            })
+            actions.append(
+                {
+                    "title": f"Address {len(high)} high-priority issues this quarter",
+                    "desc": (
+                        "Long methods and complex classes that slow down "
+                        "every feature delivery. Allocate 20% of sprint capacity to debt reduction."
+                    ),
+                }
+            )
         return actions[:3]
 
     def _hotspot_section(self, hotspots: List[Dict]) -> str:
@@ -708,16 +757,18 @@ class CTOReportGenerator:
             return ""
         rows = ""
         for h in hotspots[:5]:
-            rows += (f'<div class="hotspot-row">' +
-                    f'<span class="hs-score">{h.get("hotspot_score",0):.0f}</span>' +
-                    f'<span class="hs-file">{h.get("filepath","")}</span>' +
-                    f'<span class="hs-meta">{h.get("commits_90d",0)} commits · ' +
-                    f'{h.get("unique_authors",0)} authors</span></div>')
-        return f'''
+            rows += (
+                '<div class="hotspot-row">'
+                + f'<span class="hs-score">{h.get("hotspot_score", 0):.0f}</span>'
+                + f'<span class="hs-file">{h.get("filepath", "")}</span>'
+                + f'<span class="hs-meta">{h.get("commits_90d", 0)} commits · '
+                + f"{h.get('unique_authors', 0)} authors</span></div>"
+            )
+        return f"""
         <div class="section">
           <div class="section-title">Code Hotspots (Complex + Frequently Changed)</div>
           {rows}
-        </div>'''
+        </div>"""
 
     def _silo_section(self, silos: List[Dict]) -> str:
         """Build the knowledge silos section highlighting bus-factor risks.
@@ -735,13 +786,15 @@ class CTOReportGenerator:
             return ""
         rows = ""
         for s in silos[:3]:
-            rows += (f'<div class="summary-row">' +
-                    f'<span class="summary-label" style="font-family:monospace">' +
-                    f'{s.get("filepath","")}</span>' +
-                    f'<span class="summary-value" style="color:#f59e0b">' +
-                    f'Only: {s.get("sole_author","")}</span></div>')
-        return f'''
+            rows += (
+                '<div class="summary-row">'
+                + '<span class="summary-label" style="font-family:monospace">'
+                + f"{s.get('filepath', '')}</span>"
+                + '<span class="summary-value" style="color:#f59e0b">'
+                + f"Only: {s.get('sole_author', '')}</span></div>"
+            )
+        return f"""
         <div class="section">
           <div class="section-title">Knowledge Silos — Bus Factor Risk</div>
           {rows}
-        </div>'''
+        </div>"""

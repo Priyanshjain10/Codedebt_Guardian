@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 
 class AIModel(str, Enum):
     """Available AI models with their routing profiles."""
-    OLLAMA_QWEN = "ollama-qwen2.5-coder:7b"       # free, local, no limits
-    OLLAMA_MISTRAL = "ollama-mistral:7b"            # free, local, fast
-    GROQ_LLAMA = "groq-llama-3.3-70b"              # free tier: 14,400 RPD
-    GEMINI_FLASH = "gemini-2.0-flash"               # free tier: 1,500 RPD
-    OPENAI_GPT4O = "gpt-4o"                         # paid: last resort only
+
+    OLLAMA_QWEN = "ollama-qwen2.5-coder:7b"  # free, local, no limits
+    OLLAMA_MISTRAL = "ollama-mistral:7b"  # free, local, fast
+    GROQ_LLAMA = "groq-llama-3.3-70b"  # free tier: 14,400 RPD
+    GEMINI_FLASH = "gemini-2.0-flash"  # free tier: 1,500 RPD
+    OPENAI_GPT4O = "gpt-4o"  # paid: last resort only
     EMBEDDING = "text-embedding-3-small"
 
 
 class TaskType(str, Enum):
     """AI task types that determine model routing."""
+
     CODE_ANALYSIS = "code_analysis"
     FIX_GENERATION = "fix_generation"
     COMPLEX_REFACTOR = "complex_refactor"
@@ -37,12 +39,24 @@ class TaskType(str, Enum):
 
 # ── Model Routing Table ─────────────────────────────────────────────────
 MODEL_ROUTES: Dict[TaskType, List[AIModel]] = {
-    TaskType.CODE_ANALYSIS:    [AIModel.OLLAMA_QWEN,    AIModel.GROQ_LLAMA,   AIModel.GEMINI_FLASH],
-    TaskType.FIX_GENERATION:   [AIModel.GROQ_LLAMA,     AIModel.OLLAMA_QWEN,  AIModel.GEMINI_FLASH],
-    TaskType.COMPLEX_REFACTOR: [AIModel.GROQ_LLAMA,     AIModel.GEMINI_FLASH, AIModel.OPENAI_GPT4O],
+    TaskType.CODE_ANALYSIS: [
+        AIModel.OLLAMA_QWEN,
+        AIModel.GROQ_LLAMA,
+        AIModel.GEMINI_FLASH,
+    ],
+    TaskType.FIX_GENERATION: [
+        AIModel.GROQ_LLAMA,
+        AIModel.OLLAMA_QWEN,
+        AIModel.GEMINI_FLASH,
+    ],
+    TaskType.COMPLEX_REFACTOR: [
+        AIModel.GROQ_LLAMA,
+        AIModel.GEMINI_FLASH,
+        AIModel.OPENAI_GPT4O,
+    ],
     TaskType.PRIORITY_RANKING: [AIModel.OLLAMA_MISTRAL, AIModel.GROQ_LLAMA],
-    TaskType.EMBEDDING:        [AIModel.EMBEDDING],
-    TaskType.CHAT:             [AIModel.GEMINI_FLASH,   AIModel.GROQ_LLAMA],
+    TaskType.EMBEDDING: [AIModel.EMBEDDING],
+    TaskType.CHAT: [AIModel.GEMINI_FLASH, AIModel.GROQ_LLAMA],
 }
 
 
@@ -56,6 +70,7 @@ class OllamaClient:
     def health_check(self) -> bool:
         """Check if Ollama is running with a 2-second timeout."""
         import httpx
+
         try:
             resp = httpx.get(f"{self.base_url}/api/tags", timeout=2.0)
             self._available = resp.status_code == 200
@@ -73,6 +88,7 @@ class OllamaClient:
     ) -> dict:
         """Send a chat completion request to Ollama. Raises on failure."""
         import httpx
+
         try:
             resp = httpx.post(
                 f"{self.base_url}/api/chat",
@@ -135,7 +151,9 @@ class TokenMeter:
     def __init__(self):
         self._usage: Dict[str, Dict[str, int]] = {}
 
-    def record(self, org_id: str, model: str, input_tokens: int, output_tokens: int) -> None:
+    def record(
+        self, org_id: str, model: str, input_tokens: int, output_tokens: int
+    ) -> None:
         key = f"{org_id}:{model}"
         if key not in self._usage:
             self._usage[key] = {"input": 0, "output": 0, "calls": 0}
@@ -184,6 +202,7 @@ class AIGateway:
         if settings.GROQ_API_KEY:
             try:
                 from groq import Groq
+
                 self._clients["groq"] = Groq(api_key=settings.GROQ_API_KEY)
                 logger.info("Groq client initialized")
             except Exception as e:
@@ -193,6 +212,7 @@ class AIGateway:
         if settings.GOOGLE_API_KEY:
             try:
                 import google.generativeai as genai
+
                 genai.configure(api_key=settings.GOOGLE_API_KEY)
                 self._clients["gemini"] = genai.GenerativeModel("gemini-2.0-flash")
                 logger.info("Gemini client initialized")
@@ -203,6 +223,7 @@ class AIGateway:
         if settings.OPENAI_API_KEY:
             try:
                 import openai
+
                 self._clients["openai"] = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                 logger.info("OpenAI client initialized")
             except Exception as e:
@@ -239,12 +260,15 @@ class AIGateway:
 
             try:
                 start = time.time()
-                result = await self._call_model(model, prompt, system_prompt, temperature, max_tokens)
+                result = await self._call_model(
+                    model, prompt, system_prompt, temperature, max_tokens
+                )
                 latency = (time.time() - start) * 1000
 
                 circuit.record_success()
                 self._meter.record(
-                    org_id, model.value,
+                    org_id,
+                    model.value,
                     result.get("tokens_input", 0),
                     result.get("tokens_output", 0),
                 )
@@ -262,8 +286,12 @@ class AIGateway:
         raise RuntimeError(f"All AI models failed. Last error: {last_error}")
 
     async def _call_model(
-        self, model: AIModel, prompt: str, system_prompt: str,
-        temperature: float, max_tokens: int,
+        self,
+        model: AIModel,
+        prompt: str,
+        system_prompt: str,
+        temperature: float,
+        max_tokens: int,
     ) -> Dict[str, Any]:
         """Dispatch to specific provider."""
         import asyncio
@@ -297,7 +325,9 @@ class AIGateway:
         else:
             raise RuntimeError(f"No client available for {model.value}")
 
-    def _call_groq(self, prompt: str, system_prompt: str, temperature: float, max_tokens: int) -> dict:
+    def _call_groq(
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int
+    ) -> dict:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -315,11 +345,16 @@ class AIGateway:
             "tokens_output": resp.usage.completion_tokens if resp.usage else 0,
         }
 
-    def _call_gemini(self, prompt: str, system_prompt: str, temperature: float, max_tokens: int) -> dict:
+    def _call_gemini(
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int
+    ) -> dict:
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
         resp = self._clients["gemini"].generate_content(
             full_prompt,
-            generation_config={"temperature": temperature, "max_output_tokens": max_tokens},
+            generation_config={
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+            },
         )
         content = resp.text if resp and hasattr(resp, "text") else ""
         return {
@@ -328,7 +363,9 @@ class AIGateway:
             "tokens_output": 0,
         }
 
-    def _call_openai(self, prompt: str, system_prompt: str, temperature: float, max_tokens: int) -> dict:
+    def _call_openai(
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int
+    ) -> dict:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -358,51 +395,53 @@ class AIGateway:
         3. Gemini text-embedding-004
         """
         import asyncio
+
         if "openai" in self._clients:
             try:
                 return await asyncio.to_thread(self._openai_embedding, text)
             except Exception as e:
                 logger.warning(f"OpenAI embedding failed: {e}")
-        
+
         if self._ollama:
             try:
                 return await asyncio.to_thread(self._ollama_embedding, text)
             except Exception as e:
                 logger.warning(f"Ollama embedding failed: {e}")
-                
+
         if "gemini" in self._clients:
             try:
                 return await asyncio.to_thread(self._gemini_embedding, text)
             except Exception as e:
                 logger.warning(f"Gemini embedding failed: {e}")
-                
+
         raise RuntimeError("No embedding providers available or all failed.")
 
     def _openai_embedding(self, text: str) -> List[float]:
         resp = self._clients["openai"].embeddings.create(
-            input=[text],
-            model="text-embedding-3-small"
+            input=[text], model="text-embedding-3-small"
         )
         return resp.data[0].embedding
-        
+
     def _ollama_embedding(self, text: str) -> List[float]:
         import httpx
+
         resp = httpx.post(
             f"{self._ollama.base_url}/api/embeddings",
             json={"model": "nomic-embed-text", "prompt": text},
-            timeout=10.0
+            timeout=10.0,
         )
         resp.raise_for_status()
         return resp.json()["embedding"]
 
     def _gemini_embedding(self, text: str) -> List[float]:
         import google.generativeai as genai
+
         result = genai.embed_content(
             model="models/text-embedding-004",
             content=text,
             task_type="retrieval_document",
         )
-        return result['embedding']
+        return result["embedding"]
 
     def health(self) -> Dict[str, bool]:
         """Check which providers are available."""

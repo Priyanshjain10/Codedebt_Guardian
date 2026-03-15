@@ -5,10 +5,8 @@ Provides structured telemetry without external dependencies.
 
 import time
 import logging
-import functools
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

@@ -14,11 +14,11 @@ import os
 import time
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 try:
     import google.generativeai as genai
+
     _GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from groq import Groq
+
     _GROQ_AVAILABLE = bool(os.environ.get("GROQ_API_KEY"))
 except ImportError:
     _GROQ_AVAILABLE = False
@@ -81,12 +82,18 @@ class FixProposalAgent:
             self.model = None
         self.memory = memory or MemoryBank()
         self.obs = ObservabilityLayer(service_name="fix_proposal_agent")
-        self.token_usage = {"input": 0, "output": 0, "model_usage": {"groq": 0, "gemini": 0}}
+        self.token_usage = {
+            "input": 0,
+            "output": 0,
+            "model_usage": {"groq": 0, "gemini": 0},
+        }
 
         # Pre-built fix templates for common issues (fast path, no API call needed)
         self._fix_templates = self._build_fix_templates()
 
-    def propose(self, issues: List[Dict], project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def propose(
+        self, issues: List[Dict], project_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Generate fix proposals for a list of ranked issues.
 
@@ -114,7 +121,9 @@ class FixProposalAgent:
             logger.info(f"Generated {len(proposals)} fix proposals")
             return proposals
 
-    def _generate_fix(self, issue: Dict, project_id: Optional[str] = None) -> Optional[Dict]:
+    def _generate_fix(
+        self, issue: Dict, project_id: Optional[str] = None
+    ) -> Optional[Dict]:
         """Generate a fix for a single issue. Uses template if available, else AI."""
         issue_type = issue.get("type", "")
         cache_key = f"fix_{issue_type}_{issue.get('location', '')}"
@@ -136,11 +145,13 @@ class FixProposalAgent:
 
         return proposal
 
-    def _ai_generate_fix(self, issue: Dict, project_id: Optional[str] = None) -> Optional[Dict]:
+    def _ai_generate_fix(
+        self, issue: Dict, project_id: Optional[str] = None
+    ) -> Optional[Dict]:
         """Use Gemini to generate a fix for a complex or custom issue."""
         from services.embedding_pipeline import embedding_pipeline
         import asyncio
-        
+
         context_text = ""
         if project_id:
             try:
@@ -161,13 +172,13 @@ class FixProposalAgent:
 
         prompt = f"""Generate a fix for this technical debt issue:
 
-Type: {issue.get('type')}
-Severity: {issue.get('severity')}
-Description: {issue.get('description')}
-Location: {issue.get('location')}
-Impact: {issue.get('impact')}
-Effort to Fix: {issue.get('effort_to_fix')}
-Business Justification: {issue.get('business_justification', 'N/A')}{context_text}
+Type: {issue.get("type")}
+Severity: {issue.get("severity")}
+Description: {issue.get("description")}
+Location: {issue.get("location")}
+Impact: {issue.get("impact")}
+Effort to Fix: {issue.get("effort_to_fix")}
+Business Justification: {issue.get("business_justification", "N/A")}{context_text}
 
 Provide a complete, production-ready fix."""
 
@@ -189,7 +200,7 @@ Provide a complete, production-ready fix."""
             time.sleep(5)
             response = self.model.generate_content(prompt)
             raw = response.text.strip()
-            
+
             # Record Gemini tokens
             if hasattr(response, "usage_metadata"):
                 _in = getattr(response.usage_metadata, "prompt_token_count", 0)
@@ -230,21 +241,26 @@ Provide a complete, production-ready fix."""
             issue_type = issue.get("type", "unknown")
             location = issue.get("location", "unknown")
             description = issue.get("description", "")
-            
+
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": (
-                    f"You are a code quality expert. For this issue:\n"
-                    f"Type: {issue_type}\nLocation: {location}\n"
-                    f"Description: {description}\n\n"
-                    f"Write a 1-2 sentence fix summary explaining what to change. "
-                    f"Then on a new line write 'STEPS:' followed by 3 numbered steps. "
-                    f"Plain text only, no JSON, no code blocks."
-                )}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"You are a code quality expert. For this issue:\n"
+                            f"Type: {issue_type}\nLocation: {location}\n"
+                            f"Description: {description}\n\n"
+                            f"Write a 1-2 sentence fix summary explaining what to change. "
+                            f"Then on a new line write 'STEPS:' followed by 3 numbered steps. "
+                            f"Plain text only, no JSON, no code blocks."
+                        ),
+                    }
+                ],
                 temperature=0.1,
                 max_tokens=500,
             )
-            
+
             # Record Groq tokens
             if hasattr(response, "usage"):
                 _in = getattr(response.usage, "prompt_tokens", 0)
@@ -252,9 +268,9 @@ Provide a complete, production-ready fix."""
                 self.token_usage["input"] += _in
                 self.token_usage["output"] += _out
                 self.token_usage["model_usage"]["groq"] += _in + _out
-                
+
             text = response.choices[0].message.content.strip()
-            
+
             # Parse the plain text response into a fix dict
             lines = text.split("\n")
             summary = lines[0] if lines else f"Fix {issue_type} issue"
@@ -266,7 +282,7 @@ Provide a complete, production-ready fix."""
                     continue
                 if in_steps and line.strip():
                     steps.append(line.strip().lstrip("123456789.- "))
-            
+
             time_map = {
                 "hardcoded_password": "30-60 minutes",
                 "long_method": "1-4 hours",
@@ -279,10 +295,14 @@ Provide a complete, production-ready fix."""
                 "too_many_parameters": "1-2 hours",
             }
             raw_effort = issue.get("effort_to_fix", "1-2 hours")
-            
+
             # Map enum strings from detection to readable if present
             if raw_effort in ["MINUTES", "HOURS", "DAYS"]:
-                base = "15-30 minutes" if raw_effort == "MINUTES" else ("1-4 hours" if raw_effort == "HOURS" else "1-2 days")
+                base = (
+                    "15-30 minutes"
+                    if raw_effort == "MINUTES"
+                    else ("1-4 hours" if raw_effort == "HOURS" else "1-2 days")
+                )
                 raw_effort = time_map.get(issue_type, base)
 
             fix = {
@@ -290,7 +310,8 @@ Provide a complete, production-ready fix."""
                 "issue_type": issue_type,
                 "fix_summary": summary,
                 "problem_summary": description,
-                "steps": steps or [f"Review and fix the {issue_type} issue at {location}"],
+                "steps": steps
+                or [f"Review and fix the {issue_type} issue at {location}"],
                 "estimated_time": raw_effort,
                 "references": [],
                 "source": "groq_ai",
@@ -300,12 +321,14 @@ Provide a complete, production-ready fix."""
                     "location": issue.get("location"),
                     "score": issue.get("score"),
                     "priority": issue.get("priority"),
-                }
+                },
             }
             logger.info(f"Fix generated via Groq (plain text parsed) for {issue_type}")
             return fix
         except Exception as e:
-            logger.warning(f"Groq fix generation failed for {issue.get('type')}: {e}, falling back to Gemini")
+            logger.warning(
+                f"Groq fix generation failed for {issue.get('type')}: {e}, falling back to Gemini"
+            )
             return None
 
     def _apply_template(self, issue: Dict, template: Dict) -> Dict:
@@ -328,7 +351,7 @@ Provide a complete, production-ready fix."""
         time_map = {
             "hardcoded_password": "30-60 minutes",
             "long_method": "1-4 hours",
-            "god_class": "4-8 hours", 
+            "god_class": "4-8 hours",
             "bare_except": "15-30 minutes",
             "unpinned_dependencies": "15 minutes",
             "satd_defect": "1-2 hours",
@@ -382,7 +405,10 @@ Provide a complete, production-ready fix."""
                 ],
                 "testing_tip": "Write a test that triggers the exception and verify the specific exception type is caught correctly",
                 "estimated_time": "15-30 minutes",
-                "references": ["https://docs.python.org/3/tutorial/errors.html", "https://peps.python.org/pep-0008/#programming-recommendations"],
+                "references": [
+                    "https://docs.python.org/3/tutorial/errors.html",
+                    "https://peps.python.org/pep-0008/#programming-recommendations",
+                ],
             },
             "missing_docstring": {
                 "issue_type": "missing_docstring",
@@ -426,7 +452,9 @@ Provide a complete, production-ready fix."""
                 ],
                 "testing_tip": "Run `python -m pydoc your_module.function_name` to verify docstring renders correctly",
                 "estimated_time": "5-15 minutes per function",
-                "references": ["https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings"],
+                "references": [
+                    "https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings"
+                ],
             },
             "hardcoded_password": {
                 "issue_type": "hardcoded_password",
@@ -495,7 +523,9 @@ def _calculate_prices(items: list) -> list:
                 ],
                 "testing_tip": "Each extracted function should be independently testable — write at least one test per helper",
                 "estimated_time": "1-4 hours depending on complexity",
-                "references": ["https://refactoring.guru/refactoring/techniques/composing-methods/extract-method"],
+                "references": [
+                    "https://refactoring.guru/refactoring/techniques/composing-methods/extract-method"
+                ],
             },
             "missing_requirements": {
                 "issue_type": "missing_requirements",
@@ -525,7 +555,10 @@ ruff==0.8.4""",
                 ],
                 "testing_tip": "Create a fresh virtual environment and run `pip install -r requirements.txt` to verify it works cleanly",
                 "estimated_time": "30-60 minutes",
-                "references": ["https://pip.pypa.io/en/stable/user_guide/#requirements-files", "https://python-poetry.org/"],
+                "references": [
+                    "https://pip.pypa.io/en/stable/user_guide/#requirements-files",
+                    "https://python-poetry.org/",
+                ],
             },
             "no_tests": {
                 "issue_type": "no_tests",
@@ -568,6 +601,9 @@ class TestYourClass:
                 ],
                 "testing_tip": "Aim for 70%+ coverage on business-critical code. Use `pytest --cov --cov-report=html` to see a visual coverage report",
                 "estimated_time": "1-3 days for initial test suite",
-                "references": ["https://docs.pytest.org/en/stable/", "https://coverage.readthedocs.io/"],
+                "references": [
+                    "https://docs.pytest.org/en/stable/",
+                    "https://coverage.readthedocs.io/",
+                ],
             },
         }

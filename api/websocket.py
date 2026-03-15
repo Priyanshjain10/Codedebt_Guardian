@@ -46,7 +46,9 @@ class ConnectionManager:
         if channel not in self._channels:
             self._channels[channel] = set()
         self._channels[channel].add(websocket)
-        logger.info(f"WebSocket subscribed to {channel} ({len(self._channels[channel])} clients)")
+        logger.info(
+            f"WebSocket subscribed to {channel} ({len(self._channels[channel])} clients)"
+        )
 
     async def unsubscribe(self, channel: str, websocket: WebSocket):
         """Remove a WebSocket from a channel."""
@@ -96,7 +98,9 @@ manager = ConnectionManager()
 def _verify_ws_token(token: str) -> dict:
     """Verify JWT token for WebSocket connections."""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload
     except JWTError:
         return {}
@@ -127,11 +131,15 @@ async def scan_websocket(
 
     try:
         await manager.subscribe(channel, websocket)
-        await websocket.send_text(json.dumps({
-            "type": "connected",
-            "channel": channel,
-            "scan_id": scan_id,
-        }))
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "connected",
+                    "channel": channel,
+                    "scan_id": scan_id,
+                }
+            )
+        )
 
         # Keep connection alive with heartbeat
         while True:

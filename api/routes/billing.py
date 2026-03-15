@@ -4,7 +4,6 @@ Checkout sessions, customer portal, webhook handler, usage tracking.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -14,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from config import settings
 from database import get_db
-from models.db_models import Organization, Subscription, TeamMember, User
+from models.db_models import Subscription, TeamMember, User
 from services.audit import log_action
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,12 @@ router = APIRouter(prefix="/api/v1/billing", tags=["Billing"])
 PLAN_LIMITS = {
     "free": {"scans_monthly": 5, "projects": 1, "members": 1, "fixes_per_scan": 3},
     "pro": {"scans_monthly": 100, "projects": 10, "members": 10, "fixes_per_scan": 10},
-    "enterprise": {"scans_monthly": 999999, "projects": 999999, "members": 999999, "fixes_per_scan": 999999},
+    "enterprise": {
+        "scans_monthly": 999999,
+        "projects": 999999,
+        "members": 999999,
+        "fixes_per_scan": 999999,
+    },
 }
 
 
@@ -43,6 +47,7 @@ async def create_checkout_session(
         raise HTTPException(status_code=503, detail="Billing not configured")
 
     import stripe
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     price_id = {
@@ -76,22 +81,30 @@ async def create_portal_session(
         raise HTTPException(status_code=503, detail="Billing not configured")
 
     # Find user's org subscription
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     if not membership:
         raise HTTPException(status_code=404, detail="No organization found")
 
     from models.db_models import Team
-    team = (await db.execute(select(Team).where(Team.id == membership.team_id))).scalar_one()
-    sub = (await db.execute(
-        select(Subscription).where(Subscription.org_id == team.org_id).limit(1)
-    )).scalar_one_or_none()
+
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
+    sub = (
+        await db.execute(
+            select(Subscription).where(Subscription.org_id == team.org_id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     if not sub or not sub.stripe_customer_id:
         raise HTTPException(status_code=404, detail="No billing account found")
 
     import stripe
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     session = stripe.billing_portal.Session.create(
@@ -108,6 +121,7 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return {"received": True}
 
     import stripe
+
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     payload = await request.body()
@@ -124,9 +138,11 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         session = event["data"]["object"]
         org_id = session.get("metadata", {}).get("org_id")
         if org_id:
-            sub = (await db.execute(
-                select(Subscription).where(Subscription.org_id == org_id).limit(1)
-            )).scalar_one_or_none()
+            sub = (
+                await db.execute(
+                    select(Subscription).where(Subscription.org_id == org_id).limit(1)
+                )
+            ).scalar_one_or_none()
             if sub:
                 sub.stripe_customer_id = session.get("customer")
                 sub.stripe_subscription_id = session.get("subscription")
@@ -138,33 +154,55 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 user_id_str = session.get("metadata", {}).get("user_id")
                 if user_id_str:
                     from uuid import UUID as _UUID
-                    await log_action(db, _UUID(org_id), _UUID(user_id_str), "plan.upgraded", {
-                        "plan": "pro",
-                    })
+
+                    await log_action(
+                        db,
+                        _UUID(org_id),
+                        _UUID(user_id_str),
+                        "plan.upgraded",
+                        {
+                            "plan": "pro",
+                        },
+                    )
 
     elif event["type"] == "customer.subscription.deleted":
         sub_data = event["data"]["object"]
         customer_id = sub_data.get("customer")
-        sub = (await db.execute(
-            select(Subscription).where(Subscription.stripe_customer_id == customer_id)
-        )).scalar_one_or_none()
+        sub = (
+            await db.execute(
+                select(Subscription).where(
+                    Subscription.stripe_customer_id == customer_id
+                )
+            )
+        ).scalar_one_or_none()
         if sub:
             sub.plan = "free"
             sub.status = "canceled"
             sub.scans_limit_monthly = PLAN_LIMITS["free"]["scans_monthly"]
             await db.flush()
             # Audit log: plan downgraded
-            await log_action(db, sub.org_id, None, "plan.downgraded", {
-                "plan": "free", "reason": "subscription_deleted",
-            })
+            await log_action(
+                db,
+                sub.org_id,
+                None,
+                "plan.downgraded",
+                {
+                    "plan": "free",
+                    "reason": "subscription_deleted",
+                },
+            )
 
     elif event["type"] == "customer.subscription.updated":
         sub_data = event["data"]["object"]
         customer_id = sub_data.get("customer")
         new_status = sub_data.get("status")
-        sub = (await db.execute(
-            select(Subscription).where(Subscription.stripe_customer_id == customer_id)
-        )).scalar_one_or_none()
+        sub = (
+            await db.execute(
+                select(Subscription).where(
+                    Subscription.stripe_customer_id == customer_id
+                )
+            )
+        ).scalar_one_or_none()
         if sub:
             # Determine plan from price ID on the first line item
             items = sub_data.get("items", {}).get("data", [])
@@ -179,20 +217,34 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             sub.status = new_status
             sub.scans_limit_monthly = PLAN_LIMITS[new_plan]["scans_monthly"]
             await db.flush()
-            await log_action(db, sub.org_id, None, "plan.updated",
-                             {"new_plan": new_plan, "status": new_status})
+            await log_action(
+                db,
+                sub.org_id,
+                None,
+                "plan.updated",
+                {"new_plan": new_plan, "status": new_status},
+            )
 
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
         customer_id = invoice.get("customer")
-        sub = (await db.execute(
-            select(Subscription).where(Subscription.stripe_customer_id == customer_id)
-        )).scalar_one_or_none()
+        sub = (
+            await db.execute(
+                select(Subscription).where(
+                    Subscription.stripe_customer_id == customer_id
+                )
+            )
+        ).scalar_one_or_none()
         if sub:
             sub.status = "past_due"
             await db.flush()
-            await log_action(db, sub.org_id, None, "payment.failed",
-                             {"invoice_id": invoice.get("id")})
+            await log_action(
+                db,
+                sub.org_id,
+                None,
+                "payment.failed",
+                {"invoice_id": invoice.get("id")},
+            )
 
     return {"received": True}
 
@@ -203,17 +255,24 @@ async def get_usage(
     db: AsyncSession = Depends(get_db),
 ):
     """Get current billing period usage."""
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     if not membership:
         return {"plan": "free", "usage": {}}
 
     from models.db_models import Team
-    team = (await db.execute(select(Team).where(Team.id == membership.team_id))).scalar_one()
-    sub = (await db.execute(
-        select(Subscription).where(Subscription.org_id == team.org_id).limit(1)
-    )).scalar_one_or_none()
+
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
+    sub = (
+        await db.execute(
+            select(Subscription).where(Subscription.org_id == team.org_id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     plan = sub.plan if sub else "free"
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])

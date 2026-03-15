@@ -6,11 +6,10 @@ Install redirect, callback, repo sync, and repo listing.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 import jwt as pyjwt
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,11 @@ from api.auth import get_current_user
 from config import settings
 from database import get_db
 from models.db_models import (
-    GitHubInstallation, Organization, Project, Team, TeamMember, User,
+    GitHubInstallation,
+    Project,
+    Team,
+    TeamMember,
+    User,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,9 +33,11 @@ GITHUB_API = "https://api.github.com"
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _get_app_slug() -> str:
     """Derive GitHub App slug from APP_ID. Override via GITHUB_APP_SLUG env."""
     import os
+
     return os.getenv("GITHUB_APP_SLUG", "codedebt-guardian")
 
 
@@ -112,27 +117,34 @@ async def github_install_callback(
     Stores the installation and syncs accessible repositories as Project records.
     """
     if setup_action not in ("install", "update"):
-        return {"status": "ignored", "reason": f"Unhandled setup_action: {setup_action}"}
+        return {
+            "status": "ignored",
+            "reason": f"Unhandled setup_action: {setup_action}",
+        }
 
     # Get user's org
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     if not membership:
         raise HTTPException(status_code=400, detail="You must belong to a team first.")
 
-    team = (await db.execute(
-        select(Team).where(Team.id == membership.team_id)
-    )).scalar_one()
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
     org_id = team.org_id
 
     # Check if installation already stored
-    existing = (await db.execute(
-        select(GitHubInstallation).where(
-            GitHubInstallation.installation_id == installation_id
+    existing = (
+        await db.execute(
+            select(GitHubInstallation).where(
+                GitHubInstallation.installation_id == installation_id
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
 
     if existing:
         # Update org association if needed
@@ -188,20 +200,30 @@ async def list_github_repos(
 ):
     """List all GitHub repositories connected via installed GitHub Apps."""
     # Get user's org installations
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     if not membership:
         return {"repos": []}
 
-    team = (await db.execute(
-        select(Team).where(Team.id == membership.team_id)
-    )).scalar_one()
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
 
-    installations = (await db.execute(
-        select(GitHubInstallation).where(GitHubInstallation.org_id == team.org_id)
-    )).scalars().all()
+    installations = (
+        (
+            await db.execute(
+                select(GitHubInstallation).where(
+                    GitHubInstallation.org_id == team.org_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     all_repos = []
     for inst in installations:
@@ -210,20 +232,28 @@ async def list_github_repos(
             repos = _fetch_installation_repos(token)
             for r in repos:
                 # Check if already a Project
-                existing_project = (await db.execute(
-                    select(Project).where(Project.repo_url == r["html_url"])
-                )).scalar_one_or_none()
+                existing_project = (
+                    await db.execute(
+                        select(Project).where(Project.repo_url == r["html_url"])
+                    )
+                ).scalar_one_or_none()
 
-                all_repos.append({
-                    "name": r["full_name"],
-                    "url": r["html_url"],
-                    "private": r.get("private", False),
-                    "default_branch": r.get("default_branch", "main"),
-                    "connected": existing_project is not None,
-                    "project_id": str(existing_project.id) if existing_project else None,
-                })
+                all_repos.append(
+                    {
+                        "name": r["full_name"],
+                        "url": r["html_url"],
+                        "private": r.get("private", False),
+                        "default_branch": r.get("default_branch", "main"),
+                        "connected": existing_project is not None,
+                        "project_id": str(existing_project.id)
+                        if existing_project
+                        else None,
+                    }
+                )
         except Exception as e:
-            logger.warning(f"Failed to list repos for installation {inst.installation_id}: {e}")
+            logger.warning(
+                f"Failed to list repos for installation {inst.installation_id}: {e}"
+            )
 
     return {"repos": all_repos, "installation_count": len(installations)}
 
@@ -234,20 +264,30 @@ async def sync_github_repos(
     db: AsyncSession = Depends(get_db),
 ):
     """Re-sync all repositories from GitHub App installations and create Project records."""
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
 
     if not membership:
         raise HTTPException(status_code=400, detail="No team membership found.")
 
-    team = (await db.execute(
-        select(Team).where(Team.id == membership.team_id)
-    )).scalar_one()
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
 
-    installations = (await db.execute(
-        select(GitHubInstallation).where(GitHubInstallation.org_id == team.org_id)
-    )).scalars().all()
+    installations = (
+        (
+            await db.execute(
+                select(GitHubInstallation).where(
+                    GitHubInstallation.org_id == team.org_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     total_synced = 0
     for inst in installations:
@@ -258,6 +298,7 @@ async def sync_github_repos(
 
 
 # ── Internal Sync Logic ──────────────────────────────────────────────────
+
 
 async def _sync_repos_for_installation(
     installation: GitHubInstallation,
@@ -282,9 +323,9 @@ async def _sync_repos_for_installation(
     count = 0
     for r in repos:
         repo_url = r["html_url"]
-        existing = (await db.execute(
-            select(Project).where(Project.repo_url == repo_url)
-        )).scalar_one_or_none()
+        existing = (
+            await db.execute(select(Project).where(Project.repo_url == repo_url))
+        ).scalar_one_or_none()
 
         if not existing:
             project = Project(
@@ -298,5 +339,7 @@ async def _sync_repos_for_installation(
 
     installation.repos_synced_at = datetime.now(timezone.utc)
     await db.flush()
-    logger.info(f"Synced {count} new repos for installation {installation.installation_id}")
+    logger.info(
+        f"Synced {count} new repos for installation {installation.installation_id}"
+    )
     return count

@@ -1,18 +1,21 @@
-
 """
 Debt Interest Calculator — calculates the TRUE cost of ignoring technical debt.
 Uses GitHub commit history to show how debt compounds over time.
 No other tool does this.
 """
+
 import logging
 import os
 import requests
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
-HOURLY_RATE_USD = float(os.environ.get("DEVELOPER_HOURLY_RATE", "85"))  # Industry standard senior dev rate (Stack Overflow survey 2024)
+HOURLY_RATE_USD = float(
+    os.environ.get("DEVELOPER_HOURLY_RATE", "85")
+)  # Industry standard senior dev rate (Stack Overflow survey 2024)
+
 
 class DebtInterestCalculator:
     """
@@ -24,7 +27,9 @@ class DebtInterestCalculator:
         self.token = os.environ.get("GITHUB_TOKEN", "")
         self.headers = {"Authorization": f"token {self.token}"} if self.token else {}
 
-    def calculate(self, owner: str, repo: str, filepath: str, issue: Dict) -> Dict[str, Any]:
+    def calculate(
+        self, owner: str, repo: str, filepath: str, issue: Dict
+    ) -> Dict[str, Any]:
         """
         Calculate full debt interest report for a single issue.
         Returns cost breakdown with real git data.
@@ -35,10 +40,14 @@ class DebtInterestCalculator:
         authors = self._unique_authors(commits)
         monthly_touches = round(touch_count / max(age_days / 30, 1), 1)
 
-        base_hours = self._base_fix_hours(issue.get("effort_to_fix", "HOURS"), issue.get("type", ""))
+        base_hours = self._base_fix_hours(
+            issue.get("effort_to_fix", "HOURS"), issue.get("type", "")
+        )
         complexity_multiplier = self._complexity_multiplier(age_days, touch_count)
         current_cost_hours = round(base_hours * complexity_multiplier, 1)
-        future_cost_hours = round(current_cost_hours * 1.23, 1)  # 23% harder each quarter
+        future_cost_hours = round(
+            current_cost_hours * 1.23, 1
+        )  # 23% harder each quarter
 
         current_cost_usd = round(current_cost_hours * HOURLY_RATE_USD, 0)
         future_cost_usd = round(future_cost_hours * HOURLY_RATE_USD, 0)
@@ -49,13 +58,11 @@ class DebtInterestCalculator:
             "filepath": filepath,
             "issue_type": issue.get("type", "unknown"),
             "severity": issue.get("severity", "MEDIUM"),
-
             # Git history data
             "age_days": age_days,
             "total_touches": touch_count,
             "unique_authors": len(authors),
             "monthly_touch_rate": monthly_touches,
-
             # Cost analysis
             "base_fix_hours": base_hours,
             "complexity_multiplier": complexity_multiplier,
@@ -64,16 +71,21 @@ class DebtInterestCalculator:
             "current_cost_usd": current_cost_usd,
             "future_cost_usd": future_cost_usd,
             "interest_rate_pct": interest_rate,
-
             # Human readable summary
             "summary": self._generate_summary(
-                issue, age_days, touch_count, 
-                current_cost_hours, current_cost_usd,
-                future_cost_usd, interest_rate
-            )
+                issue,
+                age_days,
+                touch_count,
+                current_cost_hours,
+                current_cost_usd,
+                future_cost_usd,
+                interest_rate,
+            ),
         }
 
-    def calculate_repo_total(self, owner: str, repo: str, issues: List[Dict]) -> Dict[str, Any]:
+    def calculate_repo_total(
+        self, owner: str, repo: str, issues: List[Dict]
+    ) -> Dict[str, Any]:
         """Calculate total debt cost across all issues in a repo."""
         results = []
         total_current_usd = 0
@@ -107,7 +119,7 @@ class DebtInterestCalculator:
                 f"https://api.github.com/repos/{owner}/{repo}/commits",
                 params={"path": filepath, "per_page": 100},
                 headers=self.headers,
-                timeout=10
+                timeout=10,
             )
             if r.status_code == 200:
                 return r.json()
@@ -141,17 +153,17 @@ class DebtInterestCalculator:
     def _base_fix_hours(self, effort: str, issue_type: str = "") -> float:
         """Convert effort level to hours using issue-type specific estimates."""
         type_hours = {
-            "bare_except":         0.75,
-            "hardcoded_password":  1.25,
-            "missing_docstring":   0.35,
-            "long_method":         3.50,
-            "god_class":           9.50,
+            "bare_except": 0.75,
+            "hardcoded_password": 1.25,
+            "missing_docstring": 0.35,
+            "long_method": 3.50,
+            "god_class": 9.50,
             "too_many_parameters": 1.75,
-            "syntax_error":        0.45,
-            "console_log":         0.20,
-            "var_declaration":     0.30,
-            "unhandled_promise":   1.10,
-            "callback_hell":       4.25,
+            "syntax_error": 0.45,
+            "console_log": 0.20,
+            "var_declaration": 0.30,
+            "unhandled_promise": 1.10,
+            "callback_hell": 4.25,
         }
         if issue_type in type_hours:
             return type_hours[issue_type]
@@ -162,12 +174,13 @@ class DebtInterestCalculator:
         Calculate how much harder the fix has become over time.
         More touches = more entangled = harder to fix.
         """
-        age_factor = 1.0 + (age_days / 365) * 0.5   # 50% harder per year
+        age_factor = 1.0 + (age_days / 365) * 0.5  # 50% harder per year
         touch_factor = 1.0 + (touch_count / 20) * 0.3  # 30% harder per 20 touches
         return round(min(age_factor * touch_factor, 4.0), 2)  # Cap at 4x
 
-    def _generate_summary(self, issue, age_days, touches, 
-                          hours, cost_usd, future_usd, interest_rate) -> str:
+    def _generate_summary(
+        self, issue, age_days, touches, hours, cost_usd, future_usd, interest_rate
+    ) -> str:
         issue_type = issue.get("type", "debt").replace("_", " ")
         return (
             f"This {issue_type} is {age_days} days old, "

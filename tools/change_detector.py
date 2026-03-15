@@ -1,7 +1,13 @@
-""" Change Detector — finds only files changed since last analysis run. """
-import logging, os, requests, base64
-from typing import Any, Dict, List, Optional
+"""Change Detector — finds only files changed since last analysis run."""
+
+import logging
+import os
+import requests
+import base64
+from typing import Any, Dict, List
+
 logger = logging.getLogger(__name__)
+
 
 class ChangeDetector:
     SKIP_PATTERNS = ["test_", "_test.py", "tests/", "migrations/", "setup.py"]
@@ -10,6 +16,7 @@ class ChangeDetector:
         self._last_sha: dict = {}
         try:
             from tools.persistent_memory import PersistentMemoryBank
+
             self._memory = PersistentMemoryBank()
         except Exception:
             self._memory = None
@@ -48,7 +55,8 @@ class ChangeDetector:
             r = requests.get(
                 f"https://api.github.com/repos/{owner}/{repo}/commits",
                 params={"per_page": 20},
-                headers=headers, timeout=10
+                headers=headers,
+                timeout=10,
             )
             if r.status_code != 200:
                 logger.error(f"GitHub API error: {r.status_code}")
@@ -83,7 +91,8 @@ class ChangeDetector:
             for sha in new_commits[:10]:  # max 10 commits
                 r = requests.get(
                     f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}",
-                    headers=headers, timeout=10
+                    headers=headers,
+                    timeout=10,
                 )
                 if r.status_code != 200:
                     continue
@@ -97,18 +106,23 @@ class ChangeDetector:
             for filename, f in list(changed_files.items())[:15]:
                 r2 = requests.get(
                     f"https://api.github.com/repos/{owner}/{repo}/contents/{filename}",
-                    headers=headers, timeout=10
+                    headers=headers,
+                    timeout=10,
                 )
                 if r2.status_code == 200:
                     try:
-                        content = base64.b64decode(r2.json()["content"]).decode("utf-8", errors="ignore")
-                        result.append({
-                            "name": filename.split("/")[-1],
-                            "path": filename,
-                            "content": content,
-                            "additions": f.get("additions", 0),
-                            "changes": f.get("changes", 0),
-                        })
+                        content = base64.b64decode(r2.json()["content"]).decode(
+                            "utf-8", errors="ignore"
+                        )
+                        result.append(
+                            {
+                                "name": filename.split("/")[-1],
+                                "path": filename,
+                                "content": content,
+                                "additions": f.get("additions", 0),
+                                "changes": f.get("changes", 0),
+                            }
+                        )
                     except Exception as e:
                         logger.warning(f"Could not decode {filename}: {e}")
 

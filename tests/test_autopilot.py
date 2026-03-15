@@ -1,11 +1,9 @@
-
-import pytest
 import sys
-sys.path.insert(0, '/content/codedebt-guardian')
+
+sys.path.insert(0, "/content/codedebt-guardian")
 
 from agents.autopilot_agent import AutoPilotAgent, AutoPilotConfig
 from tools.safety_layer import SafetyLayer
-from tools.change_detector import ChangeDetector
 
 
 class TestSafetyLayer:
@@ -14,7 +12,7 @@ class TestSafetyLayer:
 
     def test_valid_code_passes(self):
         original = "def hello():\n    pass\n"
-        patched = "def hello():\n    \"\"\"Hello.\"\"\"\n    pass\n"
+        patched = 'def hello():\n    """Hello."""\n    pass\n'
         ok, reason = self.safety.validate(original, patched)
         assert ok, reason
 
@@ -48,11 +46,11 @@ class TestSafetyLayer:
 class TestAutoPilotConfig:
     def test_auto_merge_always_false(self):
         config = AutoPilotConfig(max_prs_per_day=10)
-        assert config.auto_merge == False
+        assert not config.auto_merge
 
     def test_default_draft_prs(self):
         config = AutoPilotConfig()
-        assert config.draft_prs_only == True
+        assert config.draft_prs_only
 
     def test_default_fix_types(self):
         config = AutoPilotConfig()
@@ -67,7 +65,7 @@ class TestAutoPilotAgent:
     def test_dry_run_creates_no_real_prs(self):
         # With no token, change detector returns empty — that is fine
         result = self.agent.run("https://github.com/Priyanshjain10/codedebt-guardian")
-        assert result["dry_run"] == True
+        assert result["dry_run"]
         assert result["errors"] == [] or isinstance(result["errors"], list)
 
     def test_daily_limit_respected(self):

@@ -6,8 +6,7 @@ Validates:
 3. Scan summary persistence format matches the spec
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestAgentTokenSchema:
@@ -17,30 +16,36 @@ class TestAgentTokenSchema:
         with patch("agents.debt_detection_agent.genai", None):
             with patch("agents.debt_detection_agent._GENAI_AVAILABLE", False):
                 from agents.debt_detection_agent import DebtDetectionAgent
+
                 agent = DebtDetectionAgent()
                 assert agent.token_usage == {
-                    "input": 0, "output": 0,
-                    "model_usage": {"groq": 0, "gemini": 0}
+                    "input": 0,
+                    "output": 0,
+                    "model_usage": {"groq": 0, "gemini": 0},
                 }
 
     def test_priority_ranking_agent_token_schema(self):
         with patch("agents.priority_ranking_agent.genai", None):
             with patch("agents.priority_ranking_agent._GENAI_AVAILABLE", False):
                 from agents.priority_ranking_agent import PriorityRankingAgent
+
                 agent = PriorityRankingAgent()
                 assert agent.token_usage == {
-                    "input": 0, "output": 0,
-                    "model_usage": {"groq": 0, "gemini": 0}
+                    "input": 0,
+                    "output": 0,
+                    "model_usage": {"groq": 0, "gemini": 0},
                 }
 
     def test_fix_proposal_agent_token_schema(self):
         with patch("agents.fix_proposal_agent.genai", None):
             with patch("agents.fix_proposal_agent._GENAI_AVAILABLE", False):
                 from agents.fix_proposal_agent import FixProposalAgent
+
                 agent = FixProposalAgent()
                 assert agent.token_usage == {
-                    "input": 0, "output": 0,
-                    "model_usage": {"groq": 0, "gemini": 0}
+                    "input": 0,
+                    "output": 0,
+                    "model_usage": {"groq": 0, "gemini": 0},
                 }
 
 
@@ -52,20 +57,24 @@ class TestOrchestratorAggregation:
             with patch("agents.priority_ranking_agent._GENAI_AVAILABLE", False):
                 with patch("agents.fix_proposal_agent._GENAI_AVAILABLE", False):
                     from agents.orchestrator import CodeDebtOrchestrator
+
                     orch = CodeDebtOrchestrator(use_persistent_memory=False)
 
                     # Simulate token usage on each agent
                     orch.detection_agent.token_usage = {
-                        "input": 100, "output": 50,
-                        "model_usage": {"groq": 120, "gemini": 30}
+                        "input": 100,
+                        "output": 50,
+                        "model_usage": {"groq": 120, "gemini": 30},
                     }
                     orch.ranking_agent.token_usage = {
-                        "input": 200, "output": 80,
-                        "model_usage": {"groq": 250, "gemini": 30}
+                        "input": 200,
+                        "output": 80,
+                        "model_usage": {"groq": 250, "gemini": 30},
                     }
                     orch.fix_agent.token_usage = {
-                        "input": 300, "output": 120,
-                        "model_usage": {"groq": 400, "gemini": 20}
+                        "input": 300,
+                        "output": 120,
+                        "model_usage": {"groq": 400, "gemini": 20},
                     }
 
                     metrics = orch.get_metrics()
@@ -87,7 +96,7 @@ class TestScanSummaryFormat:
             "token_usage": {
                 "input": 500,
                 "output": 200,
-                "model_usage": {"groq": 600, "gemini": 100}
+                "model_usage": {"groq": 600, "gemini": 100},
             }
         }
         tu = metrics.get("token_usage", {})
@@ -117,8 +126,10 @@ class TestScanSummaryFormat:
     def test_pr_scan_summary_has_token_keys(self):
         """PR Guardian summaries should also have token keys (zero for static)."""
         pr_summary = {
-            "critical": 1, "high": 0,
-            "medium": 2, "low": 1,
+            "critical": 1,
+            "high": 0,
+            "medium": 2,
+            "low": 1,
             "total_issues": 4,
             "tokens_input": 0,
             "tokens_output": 0,

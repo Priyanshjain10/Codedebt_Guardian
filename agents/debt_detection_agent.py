@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import google.generativeai as genai
+
     _GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -29,8 +30,11 @@ from tools.code_analyzer import CodeAnalyzer
 from tools.memory_bank import MemoryBank
 from tools.observability import ObservabilityLayer
 from models.schemas import (
-    TechnicalDebt, CodeLocation, DebtSeverity, EffortLevel,
-    DebtCategory, DetectionSource, DetectionResult, DetectionStats, RepoMetadata,
+    TechnicalDebt,
+    CodeLocation,
+    DebtSeverity,
+    EffortLevel,
+    DetectionSource,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,10 +42,13 @@ logger = logging.getLogger(__name__)
 
 class QuotaExhaustedError(Exception):
     """Raised when Gemini API quota is exhausted after all retry attempts."""
+
     pass
+
 
 try:
     from tools.js_analyzer import JavaScriptAnalyzer
+
     _js_analyzer = JavaScriptAnalyzer()
     JS_SUPPORT = True
 except ImportError:
@@ -49,12 +56,14 @@ except ImportError:
 
 try:
     from tools.satd_detector import SATDDetector
+
     _SATD_AVAILABLE = True
 except ImportError:
     _SATD_AVAILABLE = False
 
 try:
     from groq import Groq
+
     _GROQ_AVAILABLE = bool(os.environ.get("GROQ_API_KEY"))
 except ImportError:
     _GROQ_AVAILABLE = False
@@ -107,12 +116,16 @@ class DebtDetectionAgent:
             )
         else:
             self.model = None
-        
+
         self.github = GitHubTool()
         self.analyzer = CodeAnalyzer()
         self.memory = memory or MemoryBank()
         self.obs = ObservabilityLayer(service_name="debt_detection_agent")
-        self.token_usage = {"input": 0, "output": 0, "model_usage": {"groq": 0, "gemini": 0}}
+        self.token_usage = {
+            "input": 0,
+            "output": 0,
+            "model_usage": {"groq": 0, "gemini": 0},
+        }
 
         # SATD detector (graceful — None if unavailable)
         self.satd_detector = SATDDetector() if _SATD_AVAILABLE else None
@@ -140,7 +153,8 @@ class DebtDetectionAgent:
             repo_data = self.github.fetch_repo_contents(repo_url, branch)
             python_files = [f for f in repo_data["files"] if f["name"].endswith(".py")]
             js_files = [
-                f for f in repo_data["files"]
+                f
+                for f in repo_data["files"]
                 if f["name"].endswith((".js", ".ts", ".jsx", ".tsx"))
             ]
 
@@ -161,7 +175,9 @@ class DebtDetectionAgent:
                         all_issues.extend(js_issues)
                         files_scanned += 1
                     except Exception as e:
-                        logger.warning(f"JS analysis failed for {file_info.get('name')}: {e}")
+                        logger.warning(
+                            f"JS analysis failed for {file_info.get('name')}: {e}"
+                        )
                     # SATD scanning on JS/TS files (handles // comment style)
                     if self.satd_detector:
                         try:
@@ -171,14 +187,19 @@ class DebtDetectionAgent:
                             )
                             all_issues.extend(satd_issues)
                         except Exception as e:
-                            logger.warning(f"SATD scan failed for JS file {file_info.get('name')}: {e}")
+                            logger.warning(
+                                f"SATD scan failed for JS file {file_info.get('name')}: {e}"
+                            )
 
             # Step 3: AI-powered semantic analysis
             files_with_issues = {
-                iss.get("location", "").split(":")[0] 
-                for iss in all_issues if iss.get("location")
+                iss.get("location", "").split(":")[0]
+                for iss in all_issues
+                if iss.get("location")
             }
-            ai_files = [f for f in python_files if f.get("name") in files_with_issues][:10]
+            ai_files = [f for f in python_files if f.get("name") in files_with_issues][
+                :10
+            ]
             ai_issues = self._run_ai_analysis(ai_files, repo_data["repo_metadata"])
             all_issues.extend(ai_issues)
 
@@ -220,15 +241,17 @@ class DebtDetectionAgent:
         try:
             tree = ast.parse(content)
         except SyntaxError as e:
-            issues.append({
-                "type": "syntax_error",
-                "severity": "CRITICAL",
-                "description": f"Syntax error in file: {str(e)}",
-                "location": f"{filename}:{e.lineno}",
-                "impact": "File cannot be executed",
-                "effort_to_fix": "MINUTES",
-                "source": "static_analysis",
-            })
+            issues.append(
+                {
+                    "type": "syntax_error",
+                    "severity": "CRITICAL",
+                    "description": f"Syntax error in file: {str(e)}",
+                    "location": f"{filename}:{e.lineno}",
+                    "impact": "File cannot be executed",
+                    "effort_to_fix": "MINUTES",
+                    "source": "static_analysis",
+                }
+            )
             return issues
 
         lines = content.split("\n")
@@ -236,107 +259,130 @@ class DebtDetectionAgent:
 
         # Check for overly long files
         if total_lines > 500:
-            issues.append({
-                "type": "god_file",
-                "severity": "HIGH",
-                "description": f"File has {total_lines} lines. Files over 500 lines are hard to maintain.",
-                "location": filename,
-                "impact": "Reduced readability and maintainability",
-                "effort_to_fix": "DAYS",
-                "source": "static_analysis",
-                "metric": total_lines,
-            })
+            issues.append(
+                {
+                    "type": "god_file",
+                    "severity": "HIGH",
+                    "description": f"File has {total_lines} lines. Files over 500 lines are hard to maintain.",
+                    "location": filename,
+                    "impact": "Reduced readability and maintainability",
+                    "effort_to_fix": "DAYS",
+                    "source": "static_analysis",
+                    "metric": total_lines,
+                }
+            )
 
         for node in ast.walk(tree):
             # Detect long functions
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 func_lines = (node.end_lineno or 0) - node.lineno
                 if func_lines > 50:
-                    issues.append({
-                        "type": "long_method",
-                        "severity": "MEDIUM" if func_lines < 100 else "HIGH",
-                        "description": f"Function '{node.name}' is {func_lines} lines long (max recommended: 50)",
-                        "location": f"{filename}:{node.lineno}",
-                        "impact": "Hard to test, understand, and maintain",
-                        "effort_to_fix": "HOURS",
-                        "source": "static_analysis",
-                        "metric": func_lines,
-                    })
+                    issues.append(
+                        {
+                            "type": "long_method",
+                            "severity": "MEDIUM" if func_lines < 100 else "HIGH",
+                            "description": f"Function '{node.name}' is {func_lines} lines long (max recommended: 50)",
+                            "location": f"{filename}:{node.lineno}",
+                            "impact": "Hard to test, understand, and maintain",
+                            "effort_to_fix": "HOURS",
+                            "source": "static_analysis",
+                            "metric": func_lines,
+                        }
+                    )
 
                 # Check for missing docstrings
-                if not (node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)):
+                if not (
+                    node.body
+                    and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)
+                ):
                     if func_lines > 10:  # Only flag non-trivial functions
-                        issues.append({
-                            "type": "missing_docstring",
-                            "severity": "LOW",
-                            "description": f"Function '{node.name}' has no docstring",
-                            "location": f"{filename}:{node.lineno}",
-                            "impact": "Reduces code discoverability and maintainability",
-                            "effort_to_fix": "MINUTES",
-                            "source": "static_analysis",
-                        })
+                        issues.append(
+                            {
+                                "type": "missing_docstring",
+                                "severity": "LOW",
+                                "description": f"Function '{node.name}' has no docstring",
+                                "location": f"{filename}:{node.lineno}",
+                                "impact": "Reduces code discoverability and maintainability",
+                                "effort_to_fix": "MINUTES",
+                                "source": "static_analysis",
+                            }
+                        )
 
                 # Check for too many parameters
                 args_count = len(node.args.args)
                 if args_count > 7:
-                    issues.append({
-                        "type": "too_many_parameters",
-                        "severity": "MEDIUM",
-                        "description": f"Function '{node.name}' has {args_count} parameters (max recommended: 7)",
-                        "location": f"{filename}:{node.lineno}",
-                        "impact": "Hard to call, test and understand",
-                        "effort_to_fix": "HOURS",
-                        "source": "static_analysis",
-                        "metric": args_count,
-                    })
+                    issues.append(
+                        {
+                            "type": "too_many_parameters",
+                            "severity": "MEDIUM",
+                            "description": f"Function '{node.name}' has {args_count} parameters (max recommended: 7)",
+                            "location": f"{filename}:{node.lineno}",
+                            "impact": "Hard to call, test and understand",
+                            "effort_to_fix": "HOURS",
+                            "source": "static_analysis",
+                            "metric": args_count,
+                        }
+                    )
 
             # Detect large classes
             if isinstance(node, ast.ClassDef):
                 class_lines = (node.end_lineno or 0) - node.lineno
-                method_count = sum(1 for n in ast.walk(node) if isinstance(n, ast.FunctionDef))
+                method_count = sum(
+                    1 for n in ast.walk(node) if isinstance(n, ast.FunctionDef)
+                )
                 if class_lines > 300 or method_count > 20:
-                    issues.append({
-                        "type": "god_class",
-                        "severity": "HIGH",
-                        "description": f"Class '{node.name}' has {class_lines} lines and {method_count} methods",
-                        "location": f"{filename}:{node.lineno}",
-                        "impact": "Violates Single Responsibility Principle, hard to maintain",
-                        "effort_to_fix": "DAYS",
-                        "source": "static_analysis",
-                        "metric": {"lines": class_lines, "methods": method_count},
-                    })
+                    issues.append(
+                        {
+                            "type": "god_class",
+                            "severity": "HIGH",
+                            "description": f"Class '{node.name}' has {class_lines} lines and {method_count} methods",
+                            "location": f"{filename}:{node.lineno}",
+                            "impact": "Violates Single Responsibility Principle, hard to maintain",
+                            "effort_to_fix": "DAYS",
+                            "source": "static_analysis",
+                            "metric": {"lines": class_lines, "methods": method_count},
+                        }
+                    )
 
         # Detect hardcoded credentials
         credential_patterns = [
             (r'(password|passwd|pwd)\s*=\s*["\'][^"\']+["\']', "hardcoded_password"),
-            (r'(api_key|apikey|secret_key)\s*=\s*["\'][^"\']+["\']', "hardcoded_api_key"),
+            (
+                r'(api_key|apikey|secret_key)\s*=\s*["\'][^"\']+["\']',
+                "hardcoded_api_key",
+            ),
             (r'(token)\s*=\s*["\'][A-Za-z0-9+/]{20,}["\']', "hardcoded_token"),
         ]
         for i, line in enumerate(lines, 1):
             for pattern, debt_type in credential_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
-                    issues.append({
-                        "type": debt_type,
-                        "severity": "CRITICAL",
-                        "description": f"Possible hardcoded credential detected",
-                        "location": f"{filename}:{i}",
-                        "impact": "Security vulnerability - credentials may be exposed in version control",
-                        "effort_to_fix": "MINUTES",
-                        "source": "static_analysis",
-                    })
+                    issues.append(
+                        {
+                            "type": debt_type,
+                            "severity": "CRITICAL",
+                            "description": "Possible hardcoded credential detected",
+                            "location": f"{filename}:{i}",
+                            "impact": "Security vulnerability - credentials may be exposed in version control",
+                            "effort_to_fix": "MINUTES",
+                            "source": "static_analysis",
+                        }
+                    )
 
         # Detect bare except clauses
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler) and node.type is None:
-                issues.append({
-                    "type": "bare_except",
-                    "severity": "MEDIUM",
-                    "description": "Bare `except:` clause catches all exceptions including SystemExit and KeyboardInterrupt",
-                    "location": f"{filename}:{node.lineno}",
-                    "impact": "Can hide bugs, makes debugging very difficult",
-                    "effort_to_fix": "MINUTES",
-                    "source": "static_analysis",
-                })
+                issues.append(
+                    {
+                        "type": "bare_except",
+                        "severity": "MEDIUM",
+                        "description": "Bare `except:` clause catches all exceptions including SystemExit and KeyboardInterrupt",
+                        "location": f"{filename}:{node.lineno}",
+                        "impact": "Can hide bugs, makes debugging very difficult",
+                        "effort_to_fix": "MINUTES",
+                        "source": "static_analysis",
+                    }
+                )
 
         # SATD: Scan for self-admitted technical debt comments
         if self.satd_detector:
@@ -355,7 +401,6 @@ class DebtDetectionAgent:
 
         import time
         import json
-        import re
 
         all_ai_issues = []
 
@@ -368,11 +413,11 @@ class DebtDetectionAgent:
 
             prompt = f"""Analyze this codebase for technical debt.
 
-Repository: {repo_metadata.get('name', 'Unknown')}
-Language: {repo_metadata.get('language', 'Python')}
+Repository: {repo_metadata.get("name", "Unknown")}
+Language: {repo_metadata.get("language", "Python")}
 
 Code to analyze:
-{f.get('name', 'Unknown')}
+{f.get("name", "Unknown")}
 ```
 {content[:10000]}
 ```
@@ -386,8 +431,10 @@ Find all technical debt issues. Focus on what a senior engineer would flag in co
             if groq_key and _GROQ_AVAILABLE:
                 try:
                     client = Groq(api_key=groq_key)
-                    
-                    plain_text_prompt = prompt + """\n
+
+                    plain_text_prompt = (
+                        prompt
+                        + """\n
 Instead of JSON, provide your response in EXACTLY this plain text format for each issue found. Separate each issue with '---':
 TYPE: <category of debt>
 SEVERITY: <CRITICAL/HIGH/MEDIUM/LOW>
@@ -396,13 +443,14 @@ LOC: <file and line number>
 IMPACT: <business/technical impact>
 EFFORT: <MINUTES/HOURS/DAYS>
 ---"""
+                    )
                     response = client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "user", "content": plain_text_prompt}],
                         temperature=0.1,
                         max_tokens=4000,
                     )
-                    
+
                     # Record Groq tokens
                     if hasattr(response, "usage"):
                         _in = getattr(response.usage, "prompt_tokens", 0)
@@ -414,7 +462,7 @@ EFFORT: <MINUTES/HOURS/DAYS>
                     raw = response.choices[0].message.content.strip()
                     temp_issues = []
                     current_issue = {}
-                    
+
                     for line in raw.split("\n"):
                         line = line.strip()
                         if line == "---" or line.startswith("---"):
@@ -434,18 +482,20 @@ EFFORT: <MINUTES/HOURS/DAYS>
                             current_issue["impact"] = line[7:].strip()
                         elif line.startswith("EFFORT:"):
                             current_issue["effort_to_fix"] = line[7:].strip()
-                    
+
                     if current_issue and "type" in current_issue:
                         current_issue["source"] = "groq_ai"
                         temp_issues.append(current_issue)
-                        
+
                     if temp_issues:
                         file_issues = temp_issues
-                    
+
                     all_ai_issues.extend(file_issues)
                     continue  # skip Gemini for this file
                 except Exception as e:
-                    logger.warning(f"Groq failed for {f.get('name')}: {e}, falling back to Gemini")
+                    logger.warning(
+                        f"Groq failed for {f.get('name')}: {e}, falling back to Gemini"
+                    )
 
             # Gemini fallback
             for attempt in range(3):
@@ -453,11 +503,13 @@ EFFORT: <MINUTES/HOURS/DAYS>
                     chat = self.model.start_chat(history=self._chat_history)
                     response = chat.send_message(prompt)
                     self._chat_history = chat.history[-4:]
-                    
+
                     # Record Gemini tokens
                     if hasattr(response, "usage_metadata"):
                         _in = getattr(response.usage_metadata, "prompt_token_count", 0)
-                        _out = getattr(response.usage_metadata, "candidates_token_count", 0)
+                        _out = getattr(
+                            response.usage_metadata, "candidates_token_count", 0
+                        )
                         self.token_usage["input"] += _in
                         self.token_usage["output"] += _out
                         self.token_usage["model_usage"]["gemini"] += _in + _out
@@ -480,11 +532,15 @@ EFFORT: <MINUTES/HOURS/DAYS>
                         if attempt < 2:
                             time.sleep(5)
                         else:
-                            logger.warning(f"AI analysis failed for {f.get('name')}: {e}")
-                            raise QuotaExhaustedError(f"Gemini quota exhausted for {f.get('name')}")
+                            logger.warning(
+                                f"AI analysis failed for {f.get('name')}: {e}"
+                            )
+                            raise QuotaExhaustedError(
+                                f"Gemini quota exhausted for {f.get('name')}"
+                            )
                     else:
                         break  # Skip file silently on other errors
-            
+
             all_ai_issues.extend(file_issues)
 
         return all_ai_issues
@@ -493,17 +549,26 @@ EFFORT: <MINUTES/HOURS/DAYS>
         """Analyze requirements.txt and setup.py for dependency debt."""
         issues = []
 
-        req_file = next((f for f in repo_data["files"] if f["name"] in ["requirements.txt", "setup.py", "pyproject.toml"]), None)
+        req_file = next(
+            (
+                f
+                for f in repo_data["files"]
+                if f["name"] in ["requirements.txt", "setup.py", "pyproject.toml"]
+            ),
+            None,
+        )
         if not req_file:
-            issues.append({
-                "type": "missing_requirements",
-                "severity": "HIGH",
-                "description": "No requirements.txt or pyproject.toml found",
-                "location": "root",
-                "impact": "Project cannot be reliably reproduced or deployed",
-                "effort_to_fix": "HOURS",
-                "source": "dependency_analysis",
-            })
+            issues.append(
+                {
+                    "type": "missing_requirements",
+                    "severity": "HIGH",
+                    "description": "No requirements.txt or pyproject.toml found",
+                    "location": "root",
+                    "impact": "Project cannot be reliably reproduced or deployed",
+                    "effort_to_fix": "HOURS",
+                    "source": "dependency_analysis",
+                }
+            )
             return issues
 
         content = GitHubTool.read_file_content(req_file)
@@ -512,64 +577,87 @@ EFFORT: <MINUTES/HOURS/DAYS>
         unpinned = []
         for line in content.split("\n"):
             line = line.strip()
-            if line and not line.startswith("#") and "==" not in line and ">=" not in line and not line.startswith("-"):
+            if (
+                line
+                and not line.startswith("#")
+                and "==" not in line
+                and ">=" not in line
+                and not line.startswith("-")
+            ):
                 unpinned.append(line)
 
         if unpinned:
-            issues.append({
-                "type": "unpinned_dependencies",
-                "severity": "MEDIUM",
-                "description": f"Unpinned dependencies found: {', '.join(unpinned[:5])}",
-                "location": req_file["name"],
-                "impact": "Builds may break unexpectedly when packages update",
-                "effort_to_fix": "MINUTES",
-                "source": "dependency_analysis",
-            })
+            issues.append(
+                {
+                    "type": "unpinned_dependencies",
+                    "severity": "MEDIUM",
+                    "description": f"Unpinned dependencies found: {', '.join(unpinned[:5])}",
+                    "location": req_file["name"],
+                    "impact": "Builds may break unexpectedly when packages update",
+                    "effort_to_fix": "MINUTES",
+                    "source": "dependency_analysis",
+                }
+            )
 
         return issues
 
-    def _analyze_documentation(self, repo_data: Dict, python_files: List[Dict]) -> List[Dict]:
+    def _analyze_documentation(
+        self, repo_data: Dict, python_files: List[Dict]
+    ) -> List[Dict]:
         """Analyze documentation completeness."""
         issues = []
 
         # Check for README
-        readme = next((f for f in repo_data["files"] if f["name"].upper().startswith("README")), None)
+        readme = next(
+            (f for f in repo_data["files"] if f["name"].upper().startswith("README")),
+            None,
+        )
         if not readme:
-            issues.append({
-                "type": "missing_readme",
-                "severity": "HIGH",
-                "description": "No README file found in repository",
-                "location": "root",
-                "impact": "Project is unapproachable for new contributors",
-                "effort_to_fix": "HOURS",
-                "source": "documentation_analysis",
-            })
+            issues.append(
+                {
+                    "type": "missing_readme",
+                    "severity": "HIGH",
+                    "description": "No README file found in repository",
+                    "location": "root",
+                    "impact": "Project is unapproachable for new contributors",
+                    "effort_to_fix": "HOURS",
+                    "source": "documentation_analysis",
+                }
+            )
 
         # Check for tests
         test_files = [f for f in repo_data["files"] if "test" in f["name"].lower()]
         if not test_files:
-            issues.append({
-                "type": "no_tests",
-                "severity": "HIGH",
-                "description": "No test files detected in repository",
-                "location": "root",
-                "impact": "Cannot verify correctness, regressions go undetected",
-                "effort_to_fix": "DAYS",
-                "source": "documentation_analysis",
-            })
+            issues.append(
+                {
+                    "type": "no_tests",
+                    "severity": "HIGH",
+                    "description": "No test files detected in repository",
+                    "location": "root",
+                    "impact": "Cannot verify correctness, regressions go undetected",
+                    "effort_to_fix": "DAYS",
+                    "source": "documentation_analysis",
+                }
+            )
 
         # Check for CI/CD
-        ci_files = [f for f in repo_data["files"] if ".github" in f["name"] or "ci" in f["name"].lower()]
+        ci_files = [
+            f
+            for f in repo_data["files"]
+            if ".github" in f["name"] or "ci" in f["name"].lower()
+        ]
         if not ci_files:
-            issues.append({
-                "type": "no_cicd",
-                "severity": "MEDIUM",
-                "description": "No CI/CD configuration found",
-                "location": "root",
-                "impact": "Manual deployments are error-prone and slow",
-                "effort_to_fix": "HOURS",
-                "source": "documentation_analysis",
-            })
+            issues.append(
+                {
+                    "type": "no_cicd",
+                    "severity": "MEDIUM",
+                    "description": "No CI/CD configuration found",
+                    "location": "root",
+                    "impact": "Manual deployments are error-prone and slow",
+                    "effort_to_fix": "HOURS",
+                    "source": "documentation_analysis",
+                }
+            )
 
         return issues
 

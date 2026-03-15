@@ -6,7 +6,6 @@ Create, list, and revoke per-org API keys.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,13 +27,17 @@ async def create_api_key_endpoint(
     Generate a new API key (cdg_live_...).
     The full key is returned ONLY once — store it securely.
     """
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     if not membership:
         raise HTTPException(status_code=400, detail="No organization found")
 
-    team = (await db.execute(select(Team).where(Team.id == membership.team_id))).scalar_one()
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
 
     full_key, prefix, key_hash = generate_api_key()
 
@@ -49,9 +52,16 @@ async def create_api_key_endpoint(
     await db.flush()
 
     # Audit log: API key created
-    await log_action(db, team.org_id, user.id, "api_key.created", {
-        "key_prefix": prefix, "label": req.label,
-    })
+    await log_action(
+        db,
+        team.org_id,
+        user.id,
+        "api_key.created",
+        {
+            "key_prefix": prefix,
+            "label": req.label,
+        },
+    )
 
     return {
         "id": str(api_key.id),
@@ -111,11 +121,22 @@ async def revoke_api_key(
 
     # Audit log: API key revoked
     # Resolve org_id via the API key's user membership
-    membership = (await db.execute(
-        select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-    )).scalar_one_or_none()
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
     if membership:
-        team = (await db.execute(select(Team).where(Team.id == membership.team_id))).scalar_one()
-        await log_action(db, team.org_id, user.id, "api_key.revoked", {
-            "key_id": key_id, "key_prefix": api_key.key_prefix,
-        })
+        team = (
+            await db.execute(select(Team).where(Team.id == membership.team_id))
+        ).scalar_one()
+        await log_action(
+            db,
+            team.org_id,
+            user.id,
+            "api_key.revoked",
+            {
+                "key_id": key_id,
+                "key_prefix": api_key.key_prefix,
+            },
+        )

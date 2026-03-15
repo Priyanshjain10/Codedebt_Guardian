@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from workers.pr_tasks import process_pr_event, MARKER
 
+
 @pytest.fixture
 def mock_requests():
     with patch("workers.pr_tasks.requests") as mock_req:
@@ -20,7 +21,9 @@ def test_clean_pr(mock_requests, mock_pr_generator):
     """Test a PR with no technical debt added."""
     mock_requests.get.side_effect = [
         MagicMock(json=lambda: {"base": {"ref": "main"}}),  # PR check
-        MagicMock(text="diff --git a/test.py b/test.py\n@@ -1,1 +1,2 @@\n+print('hello')\n"),  # diff
+        MagicMock(
+            text="diff --git a/test.py b/test.py\n@@ -1,1 +1,2 @@\n+print('hello')\n"
+        ),  # diff
         MagicMock(json=lambda: []),  # comments get
     ]
 
@@ -92,7 +95,9 @@ def test_comment_update_instead_of_duplicate(mock_requests, mock_pr_generator):
     mock_requests.get.side_effect = [
         MagicMock(json=lambda: {"base": {"ref": "main"}}),
         MagicMock(text=diff_text),
-        MagicMock(json=lambda: [existing_comment, {"id": 1000, "body": "regular comment"}]),
+        MagicMock(
+            json=lambda: [existing_comment, {"id": 1000, "body": "regular comment"}]
+        ),
     ]
 
     process_pr_event("owner/repo", 4, "token")
@@ -114,7 +119,7 @@ def test_auto_fix_triggered(mock_requests, mock_pr_generator):
     diff_text += "+try:\n+  pass\n+except:\n+  pass"
 
     mock_requests.get.side_effect = [
-        MagicMock(json=lambda: {"base": {"ref": "feature"}}), # NOT main
+        MagicMock(json=lambda: {"base": {"ref": "feature"}}),  # NOT main
         MagicMock(text=diff_text),
         MagicMock(json=lambda: []),
     ]
@@ -137,7 +142,7 @@ def test_auto_fix_blocked_by_branch(mock_requests, mock_pr_generator):
     diff_text += "+try:\n+  pass\n+except:\n+  pass"
 
     mock_requests.get.side_effect = [
-        MagicMock(json=lambda: {"base": {"ref": "main"}}), # IS main
+        MagicMock(json=lambda: {"base": {"ref": "main"}}),  # IS main
         MagicMock(text=diff_text),
         MagicMock(json=lambda: []),
     ]
@@ -152,7 +157,7 @@ def test_auto_fix_blocked_by_diff_size(mock_requests, mock_pr_generator):
     """Test auto-fix is blocked if the Diff size is >= 50."""
     diff_text = "diff --git a/test.py b/test.py\n@@ -1,1 +1,52 @@\n"
     diff_text += "+try:\n+  pass\n+except:\n+  pass\n"
-    diff_text += "+print('x')\n" * 50 # pad diff size
+    diff_text += "+print('x')\n" * 50  # pad diff size
 
     mock_requests.get.side_effect = [
         MagicMock(json=lambda: {"base": {"ref": "feature"}}),

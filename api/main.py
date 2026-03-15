@@ -4,34 +4,54 @@ Production-grade FastAPI application with auth, rate limiting, WebSocket, and CO
 """
 
 import logging
-import os
 import asyncio
 import json
-from typing import Any, Dict, Optional
+from typing import Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from utils.logger import setup_structured_logging
+from config import settings
+from api.middleware import (
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+    ErrorHandlerMiddleware,
+)
+from api.auth import (
+    RegisterRequest,
+    LoginRequest,
+    TokenResponse,
+    register_user,
+    login_user,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_current_user,
+)
+from database import get_db, init_db, close_db
+from services.audit import log_action
+
+from api.rate_limit import limiter
+
+from api.routes.scans import router as scans_router
+from api.routes.organizations import router as orgs_router
+from api.routes.projects import router as projects_router
+from api.routes.billing import router as billing_router
+from api.routes.api_keys import router as api_keys_router
+from api.routes.search import router as search_router
+from api.routes.github import router as github_router
+from api.routes.analytics import router as analytics_router
+from api.websocket import router as ws_router
 
 # Configure logging early
 setup_structured_logging()
 logger = logging.getLogger(__name__)
-
-from config import settings
-from api.middleware import RequestIdMiddleware, SecurityHeadersMiddleware, ErrorHandlerMiddleware
-from api.auth import (
-    RegisterRequest, LoginRequest, TokenResponse, UserResponse,
-    register_user, login_user, create_access_token, create_refresh_token,
-    decode_token, get_current_user, get_current_user_optional,
-)
-from database import get_db, init_db, close_db
-from services.audit import log_action
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +77,7 @@ async def lifespan(app: FastAPI):
     # Start WebSocket manager
     try:
         from api.websocket import manager
+
         await manager.start()
     except Exception as e:
         logger.warning(f"WebSocket manager start failed: {e}")
@@ -66,6 +87,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     try:
         from api.websocket import manager
+
         await manager.stop()
     except Exception:
         pass
@@ -84,7 +106,7 @@ app = FastAPI(
 )
 
 # Rate limiter
-from api.rate_limit import limiter
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -101,15 +123,6 @@ app.add_middleware(
 )
 
 # ── Mount route modules ──────────────────────────────────────────────────
-from api.routes.scans import router as scans_router
-from api.routes.organizations import router as orgs_router
-from api.routes.projects import router as projects_router
-from api.routes.billing import router as billing_router
-from api.routes.api_keys import router as api_keys_router
-from api.routes.search import router as search_router
-from api.routes.github import router as github_router
-from api.routes.analytics import router as analytics_router
-from api.websocket import router as ws_router
 
 app.include_router(scans_router)
 app.include_router(orgs_router)
@@ -124,6 +137,7 @@ app.include_router(ws_router)
 # Legacy webhook router (GitHub App Debt Gate)
 try:
     from api.webhook import router as webhook_router
+
     app.include_router(webhook_router)
 except Exception:
     logger.warning("Webhook router not loaded")
@@ -139,36 +153,40 @@ async def health_live():
     """Liveness probe indicating the HTTP server is running."""
     return {"status": "alive"}
 
+
 @app.get("/health/ready")
 async def health_ready():
     """Readiness probe verifying database, redis, and worker health."""
     checks = {"api": "ready"}
     status = "ready"
-    
+
     # Database
     try:
         from database import async_engine
         from sqlalchemy import text
+
         async with async_engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["database"] = "ready"
     except Exception as e:
         status = "not_ready"
         checks["database"] = f"unreachable: {str(e)}"
-        
+
     # Redis
     try:
         import redis
+
         r = redis.from_url(settings.REDIS_URL, socket_timeout=2)
         r.ping()
         checks["redis"] = "ready"
     except Exception as e:
         status = "not_ready"
         checks["redis"] = f"unreachable: {str(e)}"
-        
+
     # Celery
     try:
         from workers.celery_app import celery_app
+
         res = celery_app.control.ping(timeout=2)
         if not res:
             status = "not_ready"
@@ -178,14 +196,15 @@ async def health_ready():
     except Exception as e:
         status = "not_ready"
         checks["celery"] = f"unreachable: {str(e)}"
-        
+
     if status != "ready":
         raise HTTPException(status_code=503, detail=checks)
-        
+
     return {"status": status, "checks": checks}
 
 
 # ── Auth Endpoints ───────────────────────────────────────────────────────
+
 
 @app.post("/api/v1/auth/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db=Depends(get_db)):
@@ -207,6 +226,7 @@ async def login(req: LoginRequest, db=Depends(get_db)):
     user, org_id = await login_user(req, db)
     if org_id:
         from uuid import UUID as _UUID
+
         await log_action(db, _UUID(org_id), user.id, "user.login", {"email": req.email})
     access = create_access_token(str(user.id), org_id)
     refresh = create_refresh_token(str(user.id))
@@ -250,6 +270,7 @@ async def get_me(user=Depends(get_current_user)):
 
 # ── Legacy Streaming Endpoint (backward compat) ─────────────────────────
 
+
 class LegacyAnalyzeRequest(BaseModel):
     repo_url: str
     auto_fix: bool = False
@@ -269,6 +290,7 @@ async def legacy_analyze(request: Request, req: LegacyAnalyzeRequest):
     async def event_generator():
         try:
             from agents.orchestrator import CodeDebtOrchestrator
+
             orchestrator = CodeDebtOrchestrator(use_persistent_memory=True)
 
             gen = orchestrator.run_full_analysis_stream(repo_url=req.repo_url)
@@ -276,13 +298,18 @@ async def legacy_analyze(request: Request, req: LegacyAnalyzeRequest):
                 yield event
         except Exception as e:
             import traceback
+
             traceback.print_exc()
-            yield json.dumps({"status": "error", "message": f"Analysis failed: {str(e)}"}) + "\n"
+            yield (
+                json.dumps({"status": "error", "message": f"Analysis failed: {str(e)}"})
+                + "\n"
+            )
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ── Legacy Report Endpoint ───────────────────────────────────────────────
+
 
 class LegacyReportRequest(BaseModel):
     repo_url: str
@@ -306,16 +333,20 @@ async def legacy_report(req: LegacyReportRequest):
         html = CTOReportGenerator().generate(analysis_data, repo_url=req.repo_url)
         return {"html": html}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Report generation failed: {str(e)}"
+        )
 
 
 # ── AI Gateway Health ────────────────────────────────────────────────────
+
 
 @app.get("/api/v1/ai/health")
 async def ai_health():
     """Check AI provider availability."""
     try:
         from services.ai_gateway import ai_gateway
+
         return {"providers": ai_gateway.health()}
     except Exception as e:
         return {"providers": {}, "error": str(e)}

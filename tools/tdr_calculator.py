@@ -4,19 +4,20 @@ Like a credit score, but for code. 0-100. Executives understand it instantly.
 TDR = (remediation_cost / development_cost) * 100
 Healthy: <5% | Warning: 5-20% | Critical: >20%
 """
-from typing import Any, Dict, List, Optional
+
+from typing import Any, Dict, List
 import os
 
-class TDRCalculator:
 
+class TDRCalculator:
     HOURLY_RATE = float(os.environ.get("DEVELOPER_HOURLY_RATE", "85"))
-    LOC_PER_HOUR = 15        # industry average lines of production code per dev-hour
-    AVG_LOC_PER_FILE = 120   # realistic average for a Python project file
+    LOC_PER_HOUR = 15  # industry average lines of production code per dev-hour
+    AVG_LOC_PER_FILE = 120  # realistic average for a Python project file
 
     def calculate(
         self,
         issues: List[Dict],
-        files_or_issues: Any = None,    # kept for backwards-compat, ignored
+        files_or_issues: Any = None,  # kept for backwards-compat, ignored
         files_scanned: int = 0,
     ) -> Dict[str, Any]:
         """
@@ -50,8 +51,7 @@ class TDRCalculator:
             "unpinned_dependencies": 0.25,
         }
         remediation_cost = sum(
-            fix_hours.get(i.get("type", ""), 1.75) * self.HOURLY_RATE
-            for i in issues
+            fix_hours.get(i.get("type", ""), 1.75) * self.HOURLY_RATE for i in issues
         )
 
         tdr_pct = round((remediation_cost / max(dev_cost_usd, 1)) * 100, 1)
@@ -84,5 +84,5 @@ class TDRCalculator:
                 f"for every $100 spent building this software, "
                 f"${tdr_pct:.0f} is needed to fix existing debt. "
                 f"Industry healthy threshold: <5%."
-            )
+            ),
         }

@@ -22,7 +22,6 @@ import hashlib
 import json
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
 
 import jwt
 import requests
@@ -41,9 +40,8 @@ CODEDEBT_MAX_PR_DOLLARS = float(os.getenv("CODEDEBT_MAX_PR_DOLLARS", "500"))
 GITHUB_API = "https://api.github.com"
 
 
-
-
 # ── GitHub App Authentication ───────────────────────────────────────────
+
 
 def _get_installation_token(installation_id: int) -> str:
     """
@@ -72,6 +70,7 @@ def _get_installation_token(installation_id: int) -> str:
 
 # ── Webhook Endpoint ────────────────────────────────────────────────────
 
+
 @router.post("/webhook")
 async def github_webhook(request: Request):
     """
@@ -84,9 +83,10 @@ async def github_webhook(request: Request):
     # ── Signature verification ──────────────────────────────────────
     if GITHUB_WEBHOOK_SECRET:
         signature = request.headers.get("X-Hub-Signature-256", "")
-        expected = "sha256=" + hmac.new(
-            GITHUB_WEBHOOK_SECRET.encode(), body, hashlib.sha256
-        ).hexdigest()
+        expected = (
+            "sha256="
+            + hmac.new(GITHUB_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        )
 
         if not hmac.compare_digest(signature, expected):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
@@ -101,14 +101,15 @@ async def github_webhook(request: Request):
     # ── Dispatch ────────────────────────────────────────────────────
     if event_type == "pull_request" and data.get("action") in ("opened", "synchronize"):
         from workers.pr_tasks import process_pr_event
+
         pr = data.get("pull_request", {})
         repo_full = data.get("repository", {}).get("full_name")
         pr_number = pr.get("number")
         if not repo_full or not pr_number:
             return {"status": "ignored", "reason": "missing repo or pr_number"}
-            
+
         installation_id = data.get("installation", {}).get("id")
-        
+
         if installation_id:
             try:
                 token = _get_installation_token(installation_id)
@@ -118,6 +119,3 @@ async def github_webhook(request: Request):
                 logger.error(f"Failed to enqueue PR event: {e}")
 
     return {"status": "ok"}
-
-
-

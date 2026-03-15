@@ -4,14 +4,15 @@ Tests all agents, tools, and core logic.
 """
 
 import pytest
-import ast
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # ─── Tools Tests ──────────────────────────────────────────────────────────────
+
 
 class TestMemoryBank:
     def setup_method(self):
         from tools.memory_bank import MemoryBank
+
         self.memory = MemoryBank()
 
     def test_set_and_get(self):
@@ -25,6 +26,7 @@ class TestMemoryBank:
 
     def test_ttl_expiry(self):
         import time
+
         self.memory.set("expiring", "data", ttl_seconds=1)
         assert self.memory.get("expiring") == "data"
         time.sleep(1.1)
@@ -37,7 +39,7 @@ class TestMemoryBank:
 
     def test_stats_hit_rate(self):
         self.memory.set("k", "v")
-        self.memory.get("k")     # hit
+        self.memory.get("k")  # hit
         self.memory.get("miss")  # miss
         stats = self.memory.stats()
         assert stats["cache_hits"] == 1
@@ -48,10 +50,12 @@ class TestMemoryBank:
 class TestObservabilityLayer:
     def setup_method(self):
         from tools.observability import ObservabilityLayer
+
         self.obs = ObservabilityLayer(service_name="test_service")
 
     def test_span_records_duration(self):
         import time
+
         with self.obs.trace("test_op") as span:
             span.set_attribute("key", "value")
             time.sleep(0.01)
@@ -78,6 +82,7 @@ class TestObservabilityLayer:
 class TestCodeAnalyzer:
     def setup_method(self):
         from tools.code_analyzer import CodeAnalyzer
+
         self.analyzer = CodeAnalyzer()
 
     def test_basic_metrics(self):
@@ -126,12 +131,16 @@ def f(x, y):
 """
         simple_metrics = self.analyzer.compute_metrics(simple)
         complex_metrics = self.analyzer.compute_metrics(complex_code)
-        assert complex_metrics["cyclomatic_complexity"] > simple_metrics["cyclomatic_complexity"]
+        assert (
+            complex_metrics["cyclomatic_complexity"]
+            > simple_metrics["cyclomatic_complexity"]
+        )
 
 
 class TestGitHubTool:
     def setup_method(self):
         from tools.github_tool import GitHubTool
+
         self.github = GitHubTool()
 
     def test_parse_repo_url_https(self):
@@ -156,10 +165,12 @@ class TestGitHubTool:
 
 # ─── Agent Tests ──────────────────────────────────────────────────────────────
 
+
 class TestDebtDetectionAgent:
     def setup_method(self):
         from agents.debt_detection_agent import DebtDetectionAgent
         from tools.memory_bank import MemoryBank
+
         self.agent = DebtDetectionAgent(memory=MemoryBank())
 
     def test_detects_long_function(self):
@@ -221,7 +232,11 @@ except:
     def test_compute_stats(self):
         """Test statistics computation."""
         issues = [
-            {"severity": "CRITICAL", "type": "hardcoded_password", "source": "static_analysis"},
+            {
+                "severity": "CRITICAL",
+                "type": "hardcoded_password",
+                "source": "static_analysis",
+            },
             {"severity": "HIGH", "type": "long_method", "source": "static_analysis"},
             {"severity": "MEDIUM", "type": "bare_except", "source": "gemini_ai"},
         ]
@@ -235,22 +250,42 @@ class TestPriorityRankingAgent:
     def setup_method(self):
         from agents.priority_ranking_agent import PriorityRankingAgent
         from tools.memory_bank import MemoryBank
+
         self.agent = PriorityRankingAgent(memory=MemoryBank())
 
     def test_critical_ranked_higher_than_low(self):
         """Critical issues should have higher scores than low issues."""
-        critical = self.agent._score_issue({"severity": "CRITICAL", "type": "hardcoded_password", "effort_to_fix": "MINUTES"}, 0)
-        low = self.agent._score_issue({"severity": "LOW", "type": "missing_docstring", "effort_to_fix": "MINUTES"}, 1)
+        critical = self.agent._score_issue(
+            {
+                "severity": "CRITICAL",
+                "type": "hardcoded_password",
+                "effort_to_fix": "MINUTES",
+            },
+            0,
+        )
+        low = self.agent._score_issue(
+            {
+                "severity": "LOW",
+                "type": "missing_docstring",
+                "effort_to_fix": "MINUTES",
+            },
+            1,
+        )
         assert critical["score"] > low["score"]
 
     def test_quick_win_flagged_correctly(self):
         """MINUTES effort + high score should be flagged as quick win."""
-        issue = self.agent._score_issue({"severity": "CRITICAL", "type": "bare_except", "effort_to_fix": "MINUTES"}, 0)
+        issue = self.agent._score_issue(
+            {"severity": "CRITICAL", "type": "bare_except", "effort_to_fix": "MINUTES"},
+            0,
+        )
         assert issue["quick_win"] is True
 
     def test_days_effort_not_quick_win(self):
         """DAYS effort should not be a quick win."""
-        issue = self.agent._score_issue({"severity": "HIGH", "type": "god_class", "effort_to_fix": "DAYS"}, 0)
+        issue = self.agent._score_issue(
+            {"severity": "HIGH", "type": "god_class", "effort_to_fix": "DAYS"}, 0
+        )
         assert issue["quick_win"] is False
 
     def test_score_to_priority_critical(self):
@@ -270,10 +305,18 @@ class TestPriorityRankingAgent:
         """All input issues should be present in ranked output."""
         issues = [
             {"severity": "HIGH", "type": "long_method", "effort_to_fix": "HOURS"},
-            {"severity": "LOW", "type": "missing_docstring", "effort_to_fix": "MINUTES"},
-            {"severity": "CRITICAL", "type": "hardcoded_password", "effort_to_fix": "MINUTES"},
+            {
+                "severity": "LOW",
+                "type": "missing_docstring",
+                "effort_to_fix": "MINUTES",
+            },
+            {
+                "severity": "CRITICAL",
+                "type": "hardcoded_password",
+                "effort_to_fix": "MINUTES",
+            },
         ]
-        with patch.object(self.agent, '_get_ai_enrichment', return_value=[]):
+        with patch.object(self.agent, "_get_ai_enrichment", return_value=[]):
             ranked = self.agent.rank(issues)
         assert len(ranked) == 3
 
@@ -293,6 +336,7 @@ class TestFixProposalAgent:
     def setup_method(self):
         from agents.fix_proposal_agent import FixProposalAgent
         from tools.memory_bank import MemoryBank
+
         self.agent = FixProposalAgent(memory=MemoryBank())
 
     def test_template_available_for_bare_except(self):
@@ -306,20 +350,43 @@ class TestFixProposalAgent:
 
     def test_template_fix_has_required_fields(self):
         """All templates must have required fields."""
-        required = {"issue_type", "severity", "problem_summary", "fix_summary", "before_code", "after_code", "steps", "testing_tip"}
+        required = {
+            "issue_type",
+            "severity",
+            "problem_summary",
+            "fix_summary",
+            "before_code",
+            "after_code",
+            "steps",
+            "testing_tip",
+        }
         for name, template in self.agent._fix_templates.items():
             for field in required:
                 assert field in template, f"Template '{name}' missing field '{field}'"
 
     def test_apply_template_adds_issue_metadata(self):
-        issue = {"_rank_id": 42, "type": "bare_except", "severity": "MEDIUM", "location": "app.py:10", "score": 70, "priority": "HIGH"}
-        proposal = self.agent._apply_template(issue, self.agent._fix_templates["bare_except"])
+        issue = {
+            "_rank_id": 42,
+            "type": "bare_except",
+            "severity": "MEDIUM",
+            "location": "app.py:10",
+            "score": 70,
+            "priority": "HIGH",
+        }
+        proposal = self.agent._apply_template(
+            issue, self.agent._fix_templates["bare_except"]
+        )
         assert proposal["issue_id"] == 42
         assert proposal["source"] == "template"
         assert proposal["original_issue"]["location"] == "app.py:10"
 
     def test_fallback_fix_always_works(self):
-        issue = {"_rank_id": 1, "type": "unknown_type", "severity": "LOW", "location": "x.py:1"}
+        issue = {
+            "_rank_id": 1,
+            "type": "unknown_type",
+            "severity": "LOW",
+            "location": "x.py:1",
+        }
         fallback = self.agent._fallback_fix(issue)
         assert "steps" in fallback
         assert len(fallback["steps"]) > 0

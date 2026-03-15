@@ -3,7 +3,6 @@ Orchestrator Agent - Coordinates the multi-agent pipeline.
 Manages session state, memory, and agent communication.
 """
 
-import os
 import json
 import hashlib
 import logging
@@ -25,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from tools.tdr_calculator import TDRCalculator
+
     _tdr_calculator = TDRCalculator()
     TDR_SUPPORT = True
 except Exception:
@@ -32,6 +32,7 @@ except Exception:
 
 try:
     from tools.hotspot_analyzer import HotspotAnalyzer
+
     _hotspot_analyzer = HotspotAnalyzer()
     HOTSPOT_SUPPORT = True
 except Exception:
@@ -48,12 +49,14 @@ class SessionState:
         self.metadata: Dict[str, Any] = {}
 
     def add_event(self, agent: str, event_type: str, data: Any):
-        self.history.append({
-            "timestamp": datetime.now().isoformat(),
-            "agent": agent,
-            "event": event_type,
-            "data": data,
-        })
+        self.history.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "agent": agent,
+                "event": event_type,
+                "data": data,
+            }
+        )
 
     def to_dict(self) -> Dict:
         return {
@@ -77,7 +80,9 @@ class CodeDebtOrchestrator:
     def __init__(self, use_persistent_memory: bool = True):
         # Use SQLite-backed memory if available, else fallback to in-memory
         try:
-            self.memory = PersistentMemoryBank() if use_persistent_memory else MemoryBank()
+            self.memory = (
+                PersistentMemoryBank() if use_persistent_memory else MemoryBank()
+            )
         except Exception:
             logger.warning("PersistentMemoryBank failed, falling back to in-memory")
             self.memory = MemoryBank()
@@ -130,10 +135,14 @@ class CodeDebtOrchestrator:
 
             # Store in memory bank
             self.memory.set(cache_key, results, ttl_seconds=3600)
-            session.add_event("detection_agent", "completed", {
-                "total_issues": results.get("total_issues", 0),
-                "files_scanned": results.get("files_scanned", 0),
-            })
+            session.add_event(
+                "detection_agent",
+                "completed",
+                {
+                    "total_issues": results.get("total_issues", 0),
+                    "files_scanned": results.get("files_scanned", 0),
+                },
+            )
 
             span.set_attribute("issues_found", results.get("total_issues", 0))
             return results
@@ -147,12 +156,16 @@ class CodeDebtOrchestrator:
             issues = detection_results.get("issues", [])
             span.set_attribute("input_issues", len(issues))
 
-            ranked = self.ranking_agent.rank(issues=issues, repo_metadata=detection_results.get("repo_metadata", {}))
+            ranked = self.ranking_agent.rank(
+                issues=issues, repo_metadata=detection_results.get("repo_metadata", {})
+            )
 
             span.set_attribute("ranked_issues", len(ranked))
             return ranked
 
-    def propose_fixes(self, ranked_issues: List[Dict[str, Any]], project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def propose_fixes(
+        self, ranked_issues: List[Dict[str, Any]], project_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Phase 3: Run the Fix Proposal Agent.
         Generates concrete fix suggestions for top priority issues.
@@ -160,7 +173,9 @@ class CodeDebtOrchestrator:
         with self.obs.trace("propose_fixes") as span:
             span.set_attribute("issues_to_fix", len(ranked_issues))
 
-            proposals = self.fix_agent.propose(issues=ranked_issues, project_id=project_id)
+            proposals = self.fix_agent.propose(
+                issues=ranked_issues, project_id=project_id
+            )
 
             span.set_attribute("proposals_generated", len(proposals))
             return proposals
@@ -188,8 +203,10 @@ class CodeDebtOrchestrator:
             if HOTSPOT_SUPPORT:
                 try:
                     parts = repo_url.rstrip("/").split("/")
-                    owner, repo = parts[-2], parts[-1].replace(".git", "")
-                    hotspots = _hotspot_analyzer.analyze(detection_results.get("issues", []))
+                    _, _ = parts[-2], parts[-1].replace(".git", "")
+                    hotspots = _hotspot_analyzer.analyze(
+                        detection_results.get("issues", [])
+                    )
                     logger.info(f"Hotspots: {len(hotspots)}, Silos: {len(silos)}")
                 except Exception as e:
                     logger.warning(f"Hotspot analysis failed: {e}")
@@ -207,9 +224,15 @@ class CodeDebtOrchestrator:
                 "fix_proposals": fix_proposals,
                 "summary": {
                     "total_issues": detection_results.get("total_issues", 0),
-                    "critical": sum(1 for i in ranked_results if i.get("priority") == "CRITICAL"),
-                    "high": sum(1 for i in ranked_results if i.get("priority") == "HIGH"),
-                    "medium": sum(1 for i in ranked_results if i.get("priority") == "MEDIUM"),
+                    "critical": sum(
+                        1 for i in ranked_results if i.get("priority") == "CRITICAL"
+                    ),
+                    "high": sum(
+                        1 for i in ranked_results if i.get("priority") == "HIGH"
+                    ),
+                    "medium": sum(
+                        1 for i in ranked_results if i.get("priority") == "MEDIUM"
+                    ),
                     "low": sum(1 for i in ranked_results if i.get("priority") == "LOW"),
                     "fixes_proposed": len(fix_proposals),
                 },
@@ -218,7 +241,7 @@ class CodeDebtOrchestrator:
             # Cleanup: delete temp directory to prevent disk leak
             if temp_dir:
                 try:
-                    if hasattr(temp_dir, 'cleanup'):
+                    if hasattr(temp_dir, "cleanup"):
                         temp_dir.cleanup()
                     else:
                         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -239,22 +262,43 @@ class CodeDebtOrchestrator:
         start = datetime.now()
         logger.info(f"Starting streaming analysis: {repo_url}")
 
-        yield json.dumps({"status": "progress", "message": "[SYS] Initializing CodeDebt Guardian pipeline..."}) + "\n"
+        yield (
+            json.dumps(
+                {
+                    "status": "progress",
+                    "message": "[SYS] Initializing CodeDebt Guardian pipeline...",
+                }
+            )
+            + "\n"
+        )
 
-        temp_dir = None # Initialize temp_dir outside try block
+        temp_dir = None  # Initialize temp_dir outside try block
 
         try:
             # Phase 1: Debt Detection
-            yield json.dumps({"status": "progress", "message": "[1/4] \U0001f575\ufe0f  Running Debt Detection Agent — downloading ZIP archive..."}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": "[1/4] \U0001f575\ufe0f  Running Debt Detection Agent — downloading ZIP archive...",
+                    }
+                )
+                + "\n"
+            )
             quota_hit = False
             try:
                 detection_results = self.detect_debt(repo_url, branch)
             except QuotaExhaustedError as e:
-                yield json.dumps({
-                    "status": "quota_exceeded",
-                    "message": str(e),
-                    "resets_in": "24h",
-                }) + "\n"
+                yield (
+                    json.dumps(
+                        {
+                            "status": "quota_exceeded",
+                            "message": str(e),
+                            "resets_in": "24h",
+                        }
+                    )
+                    + "\n"
+                )
                 quota_hit = True
                 # Re-run detection with AI disabled by clearing the model
                 self.detection_agent.model = None
@@ -265,45 +309,114 @@ class CodeDebtOrchestrator:
 
             # SATD observability — count SATD-specific issues for stream reporting
             satd_count = sum(
-                1 for i in detection_results.get("issues", [])
+                1
+                for i in detection_results.get("issues", [])
                 if i.get("source") == "satd_analysis"
             )
-            satd_msg = f" ({satd_count} SATD comments classified by Gemini)" if satd_count else ""
-            quota_note = " (AI quota reached — static results only)" if quota_hit else ""
-            yield json.dumps({"status": "progress", "message": f"[1/4] \u2705 Scanned {files_scanned} files — found {total_issues} issues{satd_msg}{quota_note}"}) + "\n"
+            satd_msg = (
+                f" ({satd_count} SATD comments classified by Gemini)"
+                if satd_count
+                else ""
+            )
+            quota_note = (
+                " (AI quota reached — static results only)" if quota_hit else ""
+            )
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": f"[1/4] \u2705 Scanned {files_scanned} files — found {total_issues} issues{satd_msg}{quota_note}",
+                    }
+                )
+                + "\n"
+            )
 
             # Phase 2: Priority Ranking
-            yield json.dumps({"status": "progress", "message": "[2/4] \U0001f4ca Running Priority Ranking Agent — scoring by business impact..."}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": "[2/4] \U0001f4ca Running Priority Ranking Agent — scoring by business impact...",
+                    }
+                )
+                + "\n"
+            )
             ranked_results = self.rank_debt(detection_results)
             critical = sum(1 for i in ranked_results if i.get("priority") == "CRITICAL")
             high = sum(1 for i in ranked_results if i.get("priority") == "HIGH")
-            yield json.dumps({"status": "progress", "message": f"[2/4] \u2705 Ranked {len(ranked_results)} issues — {critical} CRITICAL, {high} HIGH priority"}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": f"[2/4] \u2705 Ranked {len(ranked_results)} issues — {critical} CRITICAL, {high} HIGH priority",
+                    }
+                )
+                + "\n"
+            )
 
             # Phase 3: Fix Proposals
-            yield json.dumps({"status": "progress", "message": "[3/4] \U0001f527 Generating AI fix proposals for top 10 issues..."}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": "[3/4] \U0001f527 Generating AI fix proposals for top 10 issues...",
+                    }
+                )
+                + "\n"
+            )
             fix_proposals = self.propose_fixes(ranked_results[:10])
-            yield json.dumps({"status": "progress", "message": f"[3/4] \u2705 Generated {len(fix_proposals)} actionable fix proposals"}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": f"[3/4] \u2705 Generated {len(fix_proposals)} actionable fix proposals",
+                    }
+                )
+                + "\n"
+            )
 
             # Phase 4: Hotspot + TDR
-            yield json.dumps({"status": "progress", "message": "[4/4] \U0001f525 Computing TDR health score & hotspot analysis..."}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": "[4/4] \U0001f525 Computing TDR health score & hotspot analysis...",
+                    }
+                )
+                + "\n"
+            )
             hotspots = []
             silos = []
             if HOTSPOT_SUPPORT:
                 try:
                     parts = repo_url.rstrip("/").split("/")
-                    owner, repo = parts[-2], parts[-1].replace(".git", "")
-                    hotspots = _hotspot_analyzer.analyze(detection_results.get("issues", []))
+                    _, _ = parts[-2], parts[-1].replace(".git", "")
+                    hotspots = _hotspot_analyzer.analyze(
+                        detection_results.get("issues", [])
+                    )
                 except Exception as e:
                     logger.warning(f"Hotspot analysis failed: {e}")
 
-            tdr = _tdr_calculator.calculate(
-                issues=detection_results.get("issues", []),
-                files_scanned=detection_results.get("files_scanned", 0),
-            ) if TDR_SUPPORT else {}
+            tdr = (
+                _tdr_calculator.calculate(
+                    issues=detection_results.get("issues", []),
+                    files_scanned=detection_results.get("files_scanned", 0),
+                )
+                if TDR_SUPPORT
+                else {}
+            )
 
             duration = (datetime.now() - start).total_seconds()
             grade = tdr.get("grade", "N/A")
-            yield json.dumps({"status": "progress", "message": f"[4/4] \u2705 Health grade: {grade} — analysis completed in {duration:.1f}s"}) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "status": "progress",
+                        "message": f"[4/4] \u2705 Health grade: {grade} — analysis completed in {duration:.1f}s",
+                    }
+                )
+                + "\n"
+            )
 
             # Final payload
             scan_id = hashlib.md5(repo_url.encode()).hexdigest()[:12]
@@ -322,7 +435,9 @@ class CodeDebtOrchestrator:
                     "total_issues": total_issues,
                     "critical": critical,
                     "high": high,
-                    "medium": sum(1 for i in ranked_results if i.get("priority") == "MEDIUM"),
+                    "medium": sum(
+                        1 for i in ranked_results if i.get("priority") == "MEDIUM"
+                    ),
                     "low": sum(1 for i in ranked_results if i.get("priority") == "LOW"),
                     "fixes_proposed": len(fix_proposals),
                 },
@@ -331,11 +446,20 @@ class CodeDebtOrchestrator:
             # Save to disk cache for CTO report generation
             self._save_scan_cache(scan_id, final_result)
 
-            yield json.dumps({"status": "complete", "data": final_result, "scan_id": scan_id}, default=str) + "\n"
+            yield (
+                json.dumps(
+                    {"status": "complete", "data": final_result, "scan_id": scan_id},
+                    default=str,
+                )
+                + "\n"
+            )
 
         except Exception as e:
             logger.error(f"Streaming analysis failed: {e}", exc_info=True)
-            yield json.dumps({"status": "error", "message": f"[FATAL ERROR] {str(e)}"}) + "\n"
+            yield (
+                json.dumps({"status": "error", "message": f"[FATAL ERROR] {str(e)}"})
+                + "\n"
+            )
         finally:
             # Cleanup: delete temp directory to prevent disk leak
             if temp_dir:
@@ -360,28 +484,40 @@ class CodeDebtOrchestrator:
             "memory_stats": self.memory.stats(),
             "token_usage": {
                 "input": (
-                    self.detection_agent.token_usage.get("input", 0) +
-                    self.ranking_agent.token_usage.get("input", 0) +
-                    self.fix_agent.token_usage.get("input", 0)
+                    self.detection_agent.token_usage.get("input", 0)
+                    + self.ranking_agent.token_usage.get("input", 0)
+                    + self.fix_agent.token_usage.get("input", 0)
                 ),
                 "output": (
-                    self.detection_agent.token_usage.get("output", 0) +
-                    self.ranking_agent.token_usage.get("output", 0) +
-                    self.fix_agent.token_usage.get("output", 0)
+                    self.detection_agent.token_usage.get("output", 0)
+                    + self.ranking_agent.token_usage.get("output", 0)
+                    + self.fix_agent.token_usage.get("output", 0)
                 ),
                 "model_usage": {
                     "groq": (
-                        self.detection_agent.token_usage.get("model_usage", {}).get("groq", 0) +
-                        self.ranking_agent.token_usage.get("model_usage", {}).get("groq", 0) +
-                        self.fix_agent.token_usage.get("model_usage", {}).get("groq", 0)
+                        self.detection_agent.token_usage.get("model_usage", {}).get(
+                            "groq", 0
+                        )
+                        + self.ranking_agent.token_usage.get("model_usage", {}).get(
+                            "groq", 0
+                        )
+                        + self.fix_agent.token_usage.get("model_usage", {}).get(
+                            "groq", 0
+                        )
                     ),
                     "gemini": (
-                        self.detection_agent.token_usage.get("model_usage", {}).get("gemini", 0) +
-                        self.ranking_agent.token_usage.get("model_usage", {}).get("gemini", 0) +
-                        self.fix_agent.token_usage.get("model_usage", {}).get("gemini", 0)
+                        self.detection_agent.token_usage.get("model_usage", {}).get(
+                            "gemini", 0
+                        )
+                        + self.ranking_agent.token_usage.get("model_usage", {}).get(
+                            "gemini", 0
+                        )
+                        + self.fix_agent.token_usage.get("model_usage", {}).get(
+                            "gemini", 0
+                        )
                     ),
-                }
-            }
+                },
+            },
         }
 
     def _safe_tdr_calculate(self, detection_results: Dict) -> Dict:

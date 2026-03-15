@@ -3,12 +3,10 @@ CodeDebt Guardian — Centralized Configuration
 Loads all settings from environment variables / .env file using Pydantic BaseSettings.
 """
 
-import os
-from typing import List, Optional
-from pathlib import Path
+from typing import List
 
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -87,9 +85,9 @@ class Settings(BaseSettings):
 
     # ── Plan Limits ──────────────────────────────────────────────────────
     PLAN_LIMITS: dict = {
-        "free":       {"scans_monthly": 5,    "auto_prs": False, "team_seats": 1},
-        "pro":        {"scans_monthly": 100,  "auto_prs": True,  "team_seats": 10},
-        "enterprise": {"scans_monthly": 9999, "auto_prs": True,  "team_seats": 9999},
+        "free": {"scans_monthly": 5, "auto_prs": False, "team_seats": 1},
+        "pro": {"scans_monthly": 100, "auto_prs": True, "team_seats": 10},
+        "enterprise": {"scans_monthly": 9999, "auto_prs": True, "team_seats": 9999},
     }
 
     # ── Observability ────────────────────────────────────────────────────

@@ -36,11 +36,15 @@ async def create_project(
     if req.team_id:
         team_id = uuid.UUID(req.team_id)
     else:
-        membership = (await db.execute(
-            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
-        )).scalar_one_or_none()
+        membership = (
+            await db.execute(
+                select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+            )
+        ).scalar_one_or_none()
         if not membership:
-            raise HTTPException(status_code=400, detail="No team found. Create an organization first.")
+            raise HTTPException(
+                status_code=400, detail="No team found. Create an organization first."
+            )
         team_id = membership.team_id
 
     project = Project(
@@ -74,7 +78,8 @@ async def list_projects(
         .join(TeamMember, TeamMember.team_id == Team.id)
         .where(TeamMember.user_id == user.id)
         .order_by(Project.created_at.desc())
-        .offset(offset).limit(limit)
+        .offset(offset)
+        .limit(limit)
     )
     projects = result.scalars().all()
 
@@ -108,9 +113,12 @@ async def get_project(
 
     # Get scan count
     from models.db_models import Scan
-    scan_count = (await db.execute(
-        select(func.count()).select_from(Scan).where(Scan.project_id == project.id)
-    )).scalar()
+
+    scan_count = (
+        await db.execute(
+            select(func.count()).select_from(Scan).where(Scan.project_id == project.id)
+        )
+    ).scalar()
 
     return {
         "id": str(project.id),

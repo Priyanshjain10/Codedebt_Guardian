@@ -11,7 +11,7 @@ import logging
 import tempfile
 import time
 import zipfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 from pathlib import PurePosixPath, Path
 
 import requests
@@ -40,14 +40,18 @@ class GitHubTool:
     def __init__(self):
         self.token = os.environ.get("GITHUB_TOKEN")
         self.session = requests.Session()
-        self.session.headers.update({
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "CodeDebt-Guardian/1.0",
-        })
+        self.session.headers.update(
+            {
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "CodeDebt-Guardian/1.0",
+            }
+        )
         if self.token:
             self.session.headers["Authorization"] = f"token {self.token}"
         else:
-            logger.warning("No GITHUB_TOKEN set — API rate limits will be very low (60 req/hour)")
+            logger.warning(
+                "No GITHUB_TOKEN set — API rate limits will be very low (60 req/hour)"
+            )
 
     def parse_repo_url(self, repo_url: str) -> tuple[str, str]:
         """Extract owner and repo name from a GitHub URL."""
@@ -63,7 +67,9 @@ class GitHubTool:
                 return match.group(1), match.group(2)
         raise ValueError(f"Cannot parse GitHub URL: {repo_url}")
 
-    def fetch_repo_contents(self, repo_url: str, branch: str = "main") -> Dict[str, Any]:
+    def fetch_repo_contents(
+        self, repo_url: str, branch: str = "main"
+    ) -> Dict[str, Any]:
         """
         Fetch repository metadata and file contents via ZIP archive.
 
@@ -92,7 +98,9 @@ class GitHubTool:
             default_branch = repo_metadata.get("default_branch", "main")
             if default_branch != branch:
                 logger.info(f"Branch '{branch}' not found, using '{default_branch}'")
-                file_iterator, temp_dir = self._fetch_zipball(owner, repo, default_branch)
+                file_iterator, temp_dir = self._fetch_zipball(
+                    owner, repo, default_branch
+                )
             else:
                 raise
 
@@ -126,15 +134,15 @@ class GitHubTool:
             "updated_at": data.get("updated_at"),
             "topics": data.get("topics", []),
             "has_wiki": data.get("has_wiki", False),
-            "license": data.get("license", {}).get("name") if data.get("license") else None,
+            "license": data.get("license", {}).get("name")
+            if data.get("license")
+            else None,
         }
 
     # File extensions considered "source code" — prioritized over config/docs
     _SOURCE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx"}
 
-    def _fetch_zipball(
-        self, owner: str, repo: str, branch: str
-    ):
+    def _fetch_zipball(self, owner: str, repo: str, branch: str):
         """
         Download the repository as a ZIP archive and extract to a secure
         temporary directory on disk.
@@ -158,7 +166,6 @@ class GitHubTool:
 
         # Extract ZIP to disk
         zip_bytes = io.BytesIO(response.content)
-        all_files: List[Dict] = []
 
         def _file_generator():
             # For iteration efficiency without storing everything in RAM
@@ -230,25 +237,57 @@ class GitHubTool:
         if size > MAX_FILE_SIZE_BYTES:
             return False
 
-        skip_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".eggs", "target", "vendor"}
+        skip_dirs = {
+            ".git",
+            "node_modules",
+            "__pycache__",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".eggs",
+            "target",
+            "vendor",
+        }
         for skip in skip_dirs:
             if f"/{skip}/" in f"/{path}/" or path.startswith(f"{skip}/"):
                 return False
 
         # Include Python files, JS files, config files, and docs
-        include_extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".txt", ".md", ".toml", ".yaml", ".yml", ".cfg", ".ini", ".json"}
+        include_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".txt",
+            ".md",
+            ".toml",
+            ".yaml",
+            ".yml",
+            ".cfg",
+            ".ini",
+            ".json",
+        }
         ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
         return ext in include_extensions
 
-    def _get(self, url: str, retries: int = 3, stream: bool = False) -> requests.Response:
+    def _get(
+        self, url: str, retries: int = 3, stream: bool = False
+    ) -> requests.Response:
         """Make a GET request with rate limit handling and retries."""
         for attempt in range(retries):
             try:
                 response = self.session.get(url, timeout=30, stream=stream)
 
                 # Handle rate limiting
-                if response.status_code == 403 and "rate limit" in response.text.lower():
-                    reset_time = int(response.headers.get("X-RateLimit-Reset", time.time() + 60))
+                if (
+                    response.status_code == 403
+                    and "rate limit" in response.text.lower()
+                ):
+                    reset_time = int(
+                        response.headers.get("X-RateLimit-Reset", time.time() + 60)
+                    )
                     wait = max(0, reset_time - int(time.time())) + 1
                     logger.warning(f"Rate limited. Waiting {wait}s...")
                     time.sleep(min(wait, 60))
@@ -259,12 +298,12 @@ class GitHubTool:
 
             except requests.exceptions.Timeout:
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 raise
             except requests.exceptions.RequestException as e:
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
                 raise RuntimeError(f"GitHub API error for {url}: {e}") from e
 

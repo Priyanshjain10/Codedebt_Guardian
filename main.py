@@ -7,7 +7,6 @@ import os
 import sys
 import argparse
 import json
-from typing import Optional
 from datetime import datetime
 
 from agents.orchestrator import CodeDebtOrchestrator
@@ -25,8 +24,14 @@ def print_banner():
     print(banner)
 
 
-
-def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich", save_report: bool = False, auto_fix: bool = False, max_prs: int = 3):
+def run_analysis(
+    repo_url: str,
+    branch: str = "main",
+    output_format: str = "rich",
+    save_report: bool = False,
+    auto_fix: bool = False,
+    max_prs: int = 3,
+):
     """Run full technical debt analysis on a repository."""
     print_banner()
 
@@ -37,7 +42,9 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
         sys.exit(1)
 
     if not os.getenv("GOOGLE_API_KEY"):
-        print("⚠️  GOOGLE_API_KEY not set — AI features disabled, running static analysis only")
+        print(
+            "⚠️  GOOGLE_API_KEY not set — AI features disabled, running static analysis only"
+        )
 
     print(f"\n🔍 Analyzing repository: {repo_url} (branch: {branch})")
     print("─" * 60)
@@ -55,11 +62,15 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
         print(f"      ✅ Scanned {files_scanned} files — found {total_issues} issues")
 
         # Phase 2: Priority Ranking
-        print("\n[2/3] 📊 Running Priority Ranking Agent — scoring by business impact...")
+        print(
+            "\n[2/3] 📊 Running Priority Ranking Agent — scoring by business impact..."
+        )
         ranked_results = orchestrator.rank_debt(detection_results)
         critical = sum(1 for i in ranked_results if i.get("priority") == "CRITICAL")
         high = sum(1 for i in ranked_results if i.get("priority") == "HIGH")
-        print(f"      ✅ Ranked {len(ranked_results)} issues — {critical} CRITICAL, {high} HIGH priority")
+        print(
+            f"      ✅ Ranked {len(ranked_results)} issues — {critical} CRITICAL, {high} HIGH priority"
+        )
 
         # Phase 3: Fix Proposals
         print("\n[3/3] 🔧 Running Fix Proposal Agent — generating AI fix proposals...")
@@ -77,13 +88,17 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
             else:
                 num_fixes = min(max_prs, len(fix_proposals))
                 print(f"\n{'═' * 60}")
-                print(f"🤖 AUTO-FIX ENGAGED — Creating {num_fixes} GitHub Pull Request(s)...")
+                print(
+                    f"🤖 AUTO-FIX ENGAGED — Creating {num_fixes} GitHub Pull Request(s)..."
+                )
                 print(f"{'═' * 60}")
 
                 for i, fix in enumerate(fix_proposals[:num_fixes], 1):
                     issue_type = fix.get("issue_type", fix.get("type", "unknown"))
                     location = fix.get("location", fix.get("file", "unknown"))
-                    print(f"\n   [{i}/{num_fixes}] 🔧 Generating AI fix for {issue_type} in {location}...")
+                    print(
+                        f"\n   [{i}/{num_fixes}] 🔧 Generating AI fix for {issue_type} in {location}..."
+                    )
 
                 try:
                     created_prs = orchestrator.create_pull_requests(
@@ -96,7 +111,9 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
 
                     if created_prs:
                         print(f"\n   {'─' * 50}")
-                        print(f"   🎉 SUCCESS — Created {len(created_prs)} Pull Request(s):\n")
+                        print(
+                            f"   🎉 SUCCESS — Created {len(created_prs)} Pull Request(s):\n"
+                        )
                         for pr in created_prs:
                             pr_url = pr.get("html_url", pr.get("url", "N/A"))
                             pr_num = pr.get("number", "?")
@@ -104,10 +121,14 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
                             print(f"      [SUCCESS] PR #{pr_num}: {pr_title}")
                             print(f"               🔗 {pr_url}")
                     else:
-                        print("\n   ⚠️  No PRs were created (check repo permissions or file paths)")
+                        print(
+                            "\n   ⚠️  No PRs were created (check repo permissions or file paths)"
+                        )
                 except Exception as e:
                     print(f"\n   ❌ Auto-fix failed: {e}")
-                    print("      Make sure your GITHUB_TOKEN has write access to the repo")
+                    print(
+                        "      Make sure your GITHUB_TOKEN has write access to the repo"
+                    )
 
         # ── Generate report ─────────────────────────────────────────────
         report_gen = ReportGenerator()
@@ -121,8 +142,12 @@ def run_analysis(repo_url: str, branch: str = "main", output_format: str = "rich
         report["pull_requests"] = created_prs
 
         # Save analysis history
-        if hasattr(orchestrator, 'memory') and hasattr(orchestrator.memory, "save_analysis_history"):
-            orchestrator.memory.save_analysis_history(repo_url, branch, report.get("summary", {}))
+        if hasattr(orchestrator, "memory") and hasattr(
+            orchestrator.memory, "save_analysis_history"
+        ):
+            orchestrator.memory.save_analysis_history(
+                repo_url, branch, report.get("summary", {})
+            )
 
         print("\n" + "═" * 60)
         report_gen.print_summary(report, output_format)
@@ -159,12 +184,30 @@ Examples:
     )
 
     parser.add_argument("--repo", type=str, help="GitHub repository URL to analyze")
-    parser.add_argument("--branch", type=str, default="main", help="Branch to analyze (default: main)")
-    parser.add_argument("--format", choices=["rich", "json", "simple"], default="rich", help="Output format")
+    parser.add_argument(
+        "--branch", type=str, default="main", help="Branch to analyze (default: main)"
+    )
+    parser.add_argument(
+        "--format",
+        choices=["rich", "json", "simple"],
+        default="rich",
+        help="Output format",
+    )
     parser.add_argument("--save", action="store_true", help="Save report to JSON file")
-    parser.add_argument("--ui", action="store_true", help="Launch Streamlit web interface")
-    parser.add_argument("--auto-fix", action="store_true", help="🚀 Autonomously create GitHub PRs with fixes applied")
-    parser.add_argument("--max-prs", type=int, default=3, help="Max PRs to create with --auto-fix (default: 3)")
+    parser.add_argument(
+        "--ui", action="store_true", help="Launch Streamlit web interface"
+    )
+    parser.add_argument(
+        "--auto-fix",
+        action="store_true",
+        help="🚀 Autonomously create GitHub PRs with fixes applied",
+    )
+    parser.add_argument(
+        "--max-prs",
+        type=int,
+        default=3,
+        help="Max PRs to create with --auto-fix (default: 3)",
+    )
 
     args = parser.parse_args()
 
@@ -192,10 +235,11 @@ Examples:
 if __name__ == "__main__":
     main()
 
+
 # TODO: fix this later
-def bad_function(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p):
+def bad_function(a, b, c, d, e, f, g, h, i, j, k, l_var, m, n, o, p):
     try:
         pass
-    except Exception as e:
-        password = os.environ.get("PASSWORD")
+    except Exception:
+        os.environ.get("PASSWORD")
         pass

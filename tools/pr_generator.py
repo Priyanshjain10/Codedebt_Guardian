@@ -36,14 +36,18 @@ class PRGenerator:
     def __init__(self, token: Optional[str] = None):
         self.token = token or os.environ.get("GITHUB_TOKEN")
         if not self.token:
-            raise ValueError("GITHUB_TOKEN or token argument is required for PR generation")
+            raise ValueError(
+                "GITHUB_TOKEN or token argument is required for PR generation"
+            )
 
         self.session = requests.Session()
-        self.session.headers.update({
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"token {self.token}",
-            "User-Agent": "CodeDebt-Guardian/1.0",
-        })
+        self.session.headers.update(
+            {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {self.token}",
+                "User-Agent": "CodeDebt-Guardian/1.0",
+            }
+        )
         # Get authenticated user info
         self._username = self._get_username()
 
@@ -98,7 +102,9 @@ class PRGenerator:
         file_path = self._extract_file_path(location)
         if not file_path:
             logger.warning(f"Cannot determine file path from location: {location}")
-            return self._create_documentation_pr(owner, repo, fix_proposal, issue, base_branch)
+            return self._create_documentation_pr(
+                owner, repo, fix_proposal, issue, base_branch
+            )
 
         # Step 2: Create a new branch
         branch_name = self._make_branch_name(issue_type, file_path)
@@ -113,7 +119,9 @@ class PRGenerator:
         # Step 3: Get current file content
         file_content, file_sha = self._get_file(owner, repo, file_path, base_branch)
         if file_content is None:
-            return self._create_documentation_pr(owner, repo, fix_proposal, issue, base_branch)
+            return self._create_documentation_pr(
+                owner, repo, fix_proposal, issue, base_branch
+            )
 
         # Step 4: Apply the fix
         patched_content = self._apply_fix(file_content, fix_proposal, issue)
@@ -123,7 +131,9 @@ class PRGenerator:
 
         # Step 5: Commit the patched file
         commit_msg = self._make_commit_message(issue_type, file_path, fix_proposal)
-        committed = self._commit_file(owner, repo, file_path, patched_content, file_sha, branch_name, commit_msg)
+        committed = self._commit_file(
+            owner, repo, file_path, patched_content, file_sha, branch_name, commit_msg
+        )
         if not committed:
             return None
 
@@ -132,7 +142,9 @@ class PRGenerator:
         pr_body = self._make_pr_body(fix_proposal, issue, scan_id=scan_id)
 
         try:
-            return self._open_pr(owner, repo, branch_name, base_branch, pr_title, pr_body)
+            return self._open_pr(
+                owner, repo, branch_name, base_branch, pr_title, pr_body
+            )
         except Exception as e:
             logger.error(f"Failed to open PR for {repo_url}: {e}")
             return None
@@ -164,15 +176,19 @@ class PRGenerator:
 
         # Only create PRs for quick wins and critical issues
         priority_fixes = [
-            f for f in fix_proposals
-            if issue_map.get(f.get("issue_id"), {}).get("priority") in ["CRITICAL", "HIGH"]
+            f
+            for f in fix_proposals
+            if issue_map.get(f.get("issue_id"), {}).get("priority")
+            in ["CRITICAL", "HIGH"]
             or issue_map.get(f.get("issue_id"), {}).get("quick_win")
         ][:max_prs]
 
         for fix in priority_fixes:
             issue = issue_map.get(fix.get("issue_id"), {})
             try:
-                pr = self.create_fix_pr(repo_url, fix, issue, base_branch=base_branch, scan_id=scan_id)
+                pr = self.create_fix_pr(
+                    repo_url, fix, issue, base_branch=base_branch, scan_id=scan_id
+                )
                 if pr:
                     created_prs.append(pr)
                     logger.info(f"Created PR #{pr.get('number')}: {pr.get('html_url')}")
@@ -185,9 +201,22 @@ class PRGenerator:
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     # Issue types we can fix with pure code — no AI needed
-    FIXABLE_TYPES = {"hardcoded_password", "hardcoded_api_key", "hardcoded_token", "bare_except", "unpinned_dependencies"}
+    FIXABLE_TYPES = {
+        "hardcoded_password",
+        "hardcoded_api_key",
+        "hardcoded_token",
+        "bare_except",
+        "unpinned_dependencies",
+    }
     # Issue types we cannot safely auto-fix — skip PR creation entirely
-    UNFIXABLE_TYPES = {"long_method", "god_class", "too_many_parameters", "missing_docstring", "satd_defect", "satd_design"}
+    UNFIXABLE_TYPES = {
+        "long_method",
+        "god_class",
+        "too_many_parameters",
+        "missing_docstring",
+        "satd_defect",
+        "satd_design",
+    }
 
     def _apply_fix(self, file_content: str, fix_proposal: Dict, issue: Dict) -> str:
         """
@@ -232,33 +261,34 @@ class PRGenerator:
         """Use Gemini to rewrite the relevant file content when string replacement fails."""
         try:
             import google.generativeai as genai
+
             if not os.environ.get("GOOGLE_API_KEY"):
                 logger.warning("GOOGLE_API_KEY not set, cannot use Gemini fallback")
                 return file_content
-                
+
             model = genai.GenerativeModel("gemini-2.0-flash")
             prompt = f"""You are fixing a technical debt issue in a source file.
 Issue:
-Type: {issue.get('type', '')}
-Description: {issue.get('description', '')}
-Location: {issue.get('location', '')}
+Type: {issue.get("type", "")}
+Description: {issue.get("description", "")}
+Location: {issue.get("location", "")}
 
 Proposed Fix:
-{fix_proposal.get('fix_summary', '')}
+{fix_proposal.get("fix_summary", "")}
 Before code to look for:
-{fix_proposal.get('before_code', '')}
+{fix_proposal.get("before_code", "")}
 After code to replace with:
-{fix_proposal.get('after_code', '')}
+{fix_proposal.get("after_code", "")}
 
 Here is the original file content:
 {file_content}
 
 Return ONLY the complete updated file content. 
 No markdown, no backticks, no explanation. Change only the minimum necessary to fix the described issue."""
-            
+
             response = model.generate_content(prompt)
             patched = response.text
-            
+
             # Remove markdown blocks if present despite instructions
             if patched.startswith("```"):
                 patched = patched.split("\n", 1)[1]
@@ -266,26 +296,29 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
                     patched = patched.rsplit("```", 1)[0]
                 elif patched.endswith("```\n"):
                     patched = patched.rsplit("```\n", 1)[0]
-                    
+
             patched = patched.strip()
-            
+
             if not patched:
                 raise ValueError("Gemini returned empty string")
-                
+
             after_code = fix_proposal.get("after_code", "").strip()
             before_code = fix_proposal.get("before_code", "").strip()
-            
+
             if after_code and after_code not in patched:
                 raise ValueError("Gemini output does not contain the fixed code")
             if before_code and before_code in patched:
-                raise ValueError("Gemini output still contains the original bad pattern")
-                
+                raise ValueError(
+                    "Gemini output still contains the original bad pattern"
+                )
+
             # Syntax validation
             import ast as _ast
+
             _ast.parse(patched)
-            
+
             return patched
-            
+
         except Exception as e:
             logger.error(f"AI apply fix failed: {e}")
             if "Gemini returned empty string" in str(e) or "Gemini output" in str(e):
@@ -295,13 +328,14 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
     def _fix_unpinned_deps(self, content: str, issue: Dict) -> str:
         """Pin all unpinned dependencies in requirements.txt"""
         import re
+
         lines = content.split("\n")
         patched = []
         for line in lines:
             stripped = line.strip()
             if stripped and not stripped.startswith("#"):
                 # If package has no version pin, add >=current
-                if re.match(r'^[a-zA-Z0-9_\-]+$', stripped):
+                if re.match(r"^[a-zA-Z0-9_\-]+$", stripped):
                     line = f"{stripped}>=0.0.1  # TODO: pin to specific version"
             patched.append(line)
         if "import os" not in content and patched != lines:
@@ -309,8 +343,9 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
         return "\n".join(patched)
 
     def _fix_bare_except(self, content: str, issue: Dict) -> str:
-        """Replace bare except: with except Exception: """
+        """Replace bare except: with except Exception:"""
         import re
+
         location = issue.get("location", "")
         try:
             line_num = int(location.split(":")[-1]) - 1
@@ -320,16 +355,17 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
         lines = content.split("\n")
         if line_num is not None and 0 <= line_num < len(lines):
             line = lines[line_num]
-            if re.match(r'\s*except\s*:', line):
+            if re.match(r"\s*except\s*:", line):
                 lines[line_num] = line.replace("except:", "except Exception:")
                 return "\n".join(lines)
 
         # Fallback: replace all bare excepts
-        return re.sub(r'(\s*)except\s*:', r'\1except Exception:', content)
+        return re.sub(r"(\s*)except\s*:", r"\1except Exception:", content)
 
     def _fix_hardcoded_cred(self, content: str, issue: Dict) -> str:
         """Replace hardcoded credential with os.environ.get() call."""
         import re
+
         location = issue.get("location", "")
         try:
             line_num = int(location.split(":")[-1]) - 1
@@ -344,7 +380,9 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
             if match:
                 indent = match.group(1)
                 var_name = match.group(2)
-                lines[line_num] = f'{indent}{var_name} = os.environ.get("{var_name.upper()}")  # TODO: Set in .env'
+                lines[line_num] = (
+                    f'{indent}{var_name} = os.environ.get("{var_name.upper()}")  # TODO: Set in .env'
+                )
                 # Add import if not present
                 if "import os" not in content:
                     lines.insert(0, "import os")
@@ -371,14 +409,20 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
         md_content = self._make_debt_doc(fix_proposal, issue)
 
         # Check if TECH_DEBT.md already exists
-        existing_content, existing_sha = self._get_file(owner, repo, "TECH_DEBT.md", base_branch)
+        existing_content, existing_sha = self._get_file(
+            owner, repo, "TECH_DEBT.md", base_branch
+        )
         if existing_content:
             md_content = existing_content + "\n\n---\n\n" + md_content
 
         committed = self._commit_file(
-            owner, repo, "TECH_DEBT.md", md_content,
-            existing_sha, branch_name,
-            f"docs: document technical debt - {issue.get('type', 'unknown')} [{issue.get('severity', '')}]"
+            owner,
+            repo,
+            "TECH_DEBT.md",
+            md_content,
+            existing_sha,
+            branch_name,
+            f"docs: document technical debt - {issue.get('type', 'unknown')} [{issue.get('severity', '')}]",
         )
         if not committed:
             return None
@@ -389,24 +433,26 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
 
     def _make_debt_doc(self, fix: Dict, issue: Dict) -> str:
         """Generate TECH_DEBT.md content for a single issue."""
-        steps_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(fix.get("steps", [])))
-        return f"""## 🔴 {issue.get('type', 'Technical Debt').replace('_', ' ').title()} [{issue.get('severity', 'UNKNOWN')}]
+        steps_text = "\n".join(
+            f"{i + 1}. {step}" for i, step in enumerate(fix.get("steps", []))
+        )
+        return f"""## 🔴 {issue.get("type", "Technical Debt").replace("_", " ").title()} [{issue.get("severity", "UNKNOWN")}]
 
-**Location:** `{issue.get('location', 'Unknown')}`
-**Priority Score:** {issue.get('score', 'N/A')}
-**Effort to Fix:** {issue.get('effort_to_fix', 'Unknown')}
+**Location:** `{issue.get("location", "Unknown")}`
+**Priority Score:** {issue.get("score", "N/A")}
+**Effort to Fix:** {issue.get("effort_to_fix", "Unknown")}
 
 ### Problem
-{fix.get('problem_summary', issue.get('description', 'See issue for details'))}
+{fix.get("problem_summary", issue.get("description", "See issue for details"))}
 
 ### Fix
-{fix.get('fix_summary', 'See fix proposal for details')}
+{fix.get("fix_summary", "See fix proposal for details")}
 
 ### Steps
 {steps_text}
 
 ### Testing
-{fix.get('testing_tip', 'Run your test suite after applying the fix.')}
+{fix.get("testing_tip", "Run your test suite after applying the fix.")}
 
 *Generated by [CodeDebt Guardian](https://github.com/Priyanshjain10/codedebt-guardian) 🤖*
 """
@@ -414,20 +460,28 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
     def _make_pr_body(self, fix: Dict, issue: Dict, scan_id: str = "") -> str:
         """Generate a detailed PR description."""
         import difflib
-        _default_steps = "- [ ] Review the changes\n- [ ] Run tests\n- [ ] Approve if correct"
-        steps_md = "\n".join("- [ ] " + step for step in fix.get("steps", [])) or _default_steps
+
+        _default_steps = (
+            "- [ ] Review the changes\n- [ ] Run tests\n- [ ] Approve if correct"
+        )
+        steps_md = (
+            "\n".join("- [ ] " + step for step in fix.get("steps", []))
+            or _default_steps
+        )
         checklist = steps_md
         refs_md = "\n".join("- " + ref for ref in fix.get("references", []))
 
         before_code = fix.get("before_code", "")
         after_code = fix.get("after_code", "")
         if before_code and after_code:
-            diff_lines = list(difflib.unified_diff(
-                before_code.splitlines(keepends=True),
-                after_code.splitlines(keepends=True),
-                fromfile='BEFORE',
-                tofile='AFTER'
-            ))
+            diff_lines = list(
+                difflib.unified_diff(
+                    before_code.splitlines(keepends=True),
+                    after_code.splitlines(keepends=True),
+                    fromfile="BEFORE",
+                    tofile="AFTER",
+                )
+            )
             diff_text = "".join(diff_lines)
             diff_md = f"```diff\n{diff_text}\n```" if diff_text else ""
         else:
@@ -442,19 +496,19 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
 ### 🔍 Issue Detected
 | Field | Value |
 |-------|-------|
-| **Type** | `{issue.get('type', 'unknown')}` |
-| **Severity** | **{issue.get('severity', 'UNKNOWN')}** |
-| **Location** | `{issue.get('location', 'Unknown')}` |
-| **Priority Score** | {issue.get('score', 'N/A')}/100 |
-| **Estimated Fix Time** | {fix.get('estimated_time', issue.get('effort_to_fix', 'Unknown'))} |
+| **Type** | `{issue.get("type", "unknown")}` |
+| **Severity** | **{issue.get("severity", "UNKNOWN")}** |
+| **Location** | `{issue.get("location", "Unknown")}` |
+| **Priority Score** | {issue.get("score", "N/A")}/100 |
+| **Estimated Fix Time** | {fix.get("estimated_time", issue.get("effort_to_fix", "Unknown"))} |
 
 ### ❌ Problem
-{fix.get('problem_summary', issue.get('description', 'Technical debt detected'))}
+{fix.get("problem_summary", issue.get("description", "Technical debt detected"))}
 
-**Impact:** {issue.get('impact', 'Reduces code quality and maintainability')}
+**Impact:** {issue.get("impact", "Reduces code quality and maintainability")}
 
 ### ✅ Fix Applied
-{fix.get('fix_summary', 'See changes above')}
+{fix.get("fix_summary", "See changes above")}
 
 {diff_md}
 
@@ -462,10 +516,10 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
 {checklist}
 
 ### 🧪 Testing
-{fix.get('testing_tip', 'Run your test suite to verify no regressions.')}
+{fix.get("testing_tip", "Run your test suite to verify no regressions.")}
 
 ### 📚 References
-{refs_md if refs_md else '- No references provided'}
+{refs_md if refs_md else "- No references provided"}
 
 ---
 
@@ -499,7 +553,9 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
         return None
 
     def _parse_url(self, repo_url: str) -> tuple:
-        match = re.search(r"github\.com/([^/]+)/([^/]+?)(?:\.git)?$", repo_url.rstrip("/"))
+        match = re.search(
+            r"github\.com/([^/]+)/([^/]+?)(?:\.git)?$", repo_url.rstrip("/")
+        )
         if match:
             return match.group(1), match.group(2)
         raise ValueError(f"Cannot parse repo URL: {repo_url}")
@@ -517,7 +573,9 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
     def _create_branch(self, owner: str, repo: str, branch: str, sha: str) -> bool:
         url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/refs"
         try:
-            resp = self.session.post(url, json={"ref": f"refs/heads/{branch}", "sha": sha}, timeout=10)
+            resp = self.session.post(
+                url, json={"ref": f"refs/heads/{branch}", "sha": sha}, timeout=10
+            )
             resp.raise_for_status()
             return True
         except Exception as e:
@@ -532,15 +590,23 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
                 return None, None
             resp.raise_for_status()
             data = resp.json()
-            content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+            content = base64.b64decode(data["content"]).decode(
+                "utf-8", errors="replace"
+            )
             return content, data["sha"]
         except Exception as e:
             logger.warning(f"Cannot get file {path}: {e}")
             return None, None
 
     def _commit_file(
-        self, owner: str, repo: str, path: str, content: str,
-        file_sha: Optional[str], branch: str, message: str
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        content: str,
+        file_sha: Optional[str],
+        branch: str,
+        message: str,
     ) -> bool:
         url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}"
         payload = {
@@ -559,18 +625,21 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
             return False
 
     def _open_pr(
-        self, owner: str, repo: str, head: str,
-        base: str, title: str, body: str
+        self, owner: str, repo: str, head: str, base: str, title: str, body: str
     ) -> Optional[Dict]:
         url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/pulls"
         try:
-            resp = self.session.post(url, json={
-                "title": title,
-                "body": body,
-                "head": head,
-                "base": base,
-                "draft": True
-            }, timeout=15)
+            resp = self.session.post(
+                url,
+                json={
+                    "title": title,
+                    "body": body,
+                    "head": head,
+                    "base": base,
+                    "draft": True,
+                },
+                timeout=15,
+            )
             resp.raise_for_status()
             data = resp.json()
             return {

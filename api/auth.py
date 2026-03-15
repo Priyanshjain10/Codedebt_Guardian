@@ -34,6 +34,7 @@ security = HTTPBearer(auto_error=False)
 
 # ── Schemas ──────────────────────────────────────────────────────────────
 
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
@@ -77,6 +78,7 @@ class APIKeyResponse(BaseModel):
 
 # ── Password Hashing ────────────────────────────────────────────────────
 
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -87,8 +89,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 # ── JWT Token Management ────────────────────────────────────────────────
 
+
 def create_access_token(user_id: str, org_id: str = "") -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
     payload = {
         "sub": user_id,
         "org": org_id,
@@ -99,7 +104,9 @@ def create_access_token(user_id: str, org_id: str = "") -> str:
 
 
 def create_refresh_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -110,7 +117,9 @@ def create_refresh_token(user_id: str) -> str:
 
 def decode_token(token: str) -> dict:
     try:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        return jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -119,6 +128,7 @@ def decode_token(token: str) -> dict:
 
 
 # ── API Key Management ──────────────────────────────────────────────────
+
 
 def generate_api_key() -> tuple[str, str, str]:
     """Generate a new API key. Returns (full_key, prefix, hash)."""
@@ -146,6 +156,7 @@ async def verify_api_key(key: str, db: AsyncSession) -> Optional[APIKeyModel]:
 
 
 # ── FastAPI Dependencies ─────────────────────────────────────────────────
+
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -219,15 +230,13 @@ def require_role(min_role: str = "member"):
         membership = result.scalar_one_or_none()
         if not membership:
             raise HTTPException(
-                status_code=403,
-                detail="No team membership found for this account"
+                status_code=403, detail="No team membership found for this account"
             )
         user_level = role_order.get(membership.role, 0)
         required_level = role_order.get(min_role, 1)
         if user_level < required_level:
             raise HTTPException(
-                status_code=403,
-                detail=f"Requires '{min_role}' role or higher"
+                status_code=403, detail=f"Requires '{min_role}' role or higher"
             )
         return user
 
@@ -236,7 +245,10 @@ def require_role(min_role: str = "member"):
 
 # ── Registration & Login Handlers ────────────────────────────────────────
 
-async def register_user(req: RegisterRequest, db: AsyncSession) -> tuple[User, Organization]:
+
+async def register_user(
+    req: RegisterRequest, db: AsyncSession
+) -> tuple[User, Organization]:
     """Create a new user with a default organization."""
     # Check for existing email
     existing = await db.execute(select(User).where(User.email == req.email))

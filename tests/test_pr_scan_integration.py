@@ -8,7 +8,7 @@ import uuid
 from unittest.mock import patch, MagicMock
 
 import pytest
-from workers.pr_tasks import process_pr_event, MARKER
+from workers.pr_tasks import process_pr_event
 
 
 @pytest.fixture

@@ -13,11 +13,11 @@ Scoring factors:
 import os
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 try:
     import google.generativeai as genai
+
     _GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from groq import Groq
+
     _GROQ_AVAILABLE = bool(os.environ.get("GROQ_API_KEY"))
 except ImportError:
     _GROQ_AVAILABLE = False
@@ -65,9 +66,9 @@ TYPE_IMPACT_SCORES = {
 }
 
 EFFORT_MULTIPLIERS = {
-    "MINUTES": 1.5,   # Easy win — high priority boost
+    "MINUTES": 1.5,  # Easy win — high priority boost
     "HOURS": 1.0,
-    "DAYS": 0.7,      # High effort items ranked slightly lower
+    "DAYS": 0.7,  # High effort items ranked slightly lower
 }
 
 PRIORITY_THRESHOLDS = {
@@ -116,12 +117,18 @@ class PriorityRankingAgent:
             )
         else:
             self.model = None
-            
+
         self.memory = memory or MemoryBank()
         self.obs = ObservabilityLayer(service_name="priority_ranking_agent")
-        self.token_usage = {"input": 0, "output": 0, "model_usage": {"groq": 0, "gemini": 0}}
+        self.token_usage = {
+            "input": 0,
+            "output": 0,
+            "model_usage": {"groq": 0, "gemini": 0},
+        }
 
-    def rank(self, issues: List[Dict], repo_metadata: Dict = None) -> List[Dict[str, Any]]:
+    def rank(
+        self, issues: List[Dict], repo_metadata: Dict = None
+    ) -> List[Dict[str, Any]]:
         """
         Rank and score all detected issues.
 
@@ -142,7 +149,9 @@ class PriorityRankingAgent:
             scored_issues = [self._score_issue(i, idx) for idx, i in enumerate(issues)]
 
             # Step 2: AI-powered business impact enrichment (top 20 issues)
-            top_issues = sorted(scored_issues, key=lambda x: x["score"], reverse=True)[:20]
+            top_issues = sorted(scored_issues, key=lambda x: x["score"], reverse=True)[
+                :20
+            ]
             ai_enrichment = self._get_ai_enrichment(top_issues, repo_metadata or {})
 
             # Step 3: Merge AI enrichment into scores
@@ -154,9 +163,15 @@ class PriorityRankingAgent:
                     ai_score = enrichment.get("business_impact_score", 50)
                     issue["score"] = round(issue["score"] * 0.6 + ai_score * 0.4)
                     issue["quick_win"] = enrichment.get("quick_win", False)
-                    issue["blocks_other_work"] = enrichment.get("blocks_other_work", False)
-                    issue["business_justification"] = enrichment.get("business_justification", "")
-                    issue["recommended_sprint"] = enrichment.get("recommended_sprint", 2)
+                    issue["blocks_other_work"] = enrichment.get(
+                        "blocks_other_work", False
+                    )
+                    issue["business_justification"] = enrichment.get(
+                        "business_justification", ""
+                    )
+                    issue["recommended_sprint"] = enrichment.get(
+                        "recommended_sprint", 2
+                    )
 
             # Step 4: Final sort and priority labeling
             ranked = sorted(scored_issues, key=lambda x: x["score"], reverse=True)
@@ -206,20 +221,22 @@ class PriorityRankingAgent:
         # Prepare compact representation for context efficiency
         compact_issues = []
         for issue in issues:
-            compact_issues.append({
-                "id": issue.get("_rank_id"),
-                "type": issue.get("type"),
-                "severity": issue.get("severity"),
-                "description": issue.get("description", "")[:200],
-                "location": issue.get("location"),
-                "effort_to_fix": issue.get("effort_to_fix"),
-            })
+            compact_issues.append(
+                {
+                    "id": issue.get("_rank_id"),
+                    "type": issue.get("type"),
+                    "severity": issue.get("severity"),
+                    "description": issue.get("description", "")[:200],
+                    "location": issue.get("location"),
+                    "effort_to_fix": issue.get("effort_to_fix"),
+                }
+            )
 
         prompt = f"""Repository context:
-- Name: {repo_metadata.get('name', 'Unknown')}
-- Stars: {repo_metadata.get('stars', 0)}  
-- Open Issues: {repo_metadata.get('open_issues', 0)}
-- Language: {repo_metadata.get('language', 'Python')}
+- Name: {repo_metadata.get("name", "Unknown")}
+- Stars: {repo_metadata.get("stars", 0)}  
+- Open Issues: {repo_metadata.get("open_issues", 0)}
+- Language: {repo_metadata.get("language", "Python")}
 
 Technical debt items to prioritize:
 {json.dumps(compact_issues, indent=2)}
@@ -238,7 +255,7 @@ Assess business impact and prioritization for each item."""
         # Gemini fallback
         try:
             response = self.model.generate_content(prompt)
-            
+
             # Record Gemini tokens
             if hasattr(response, "usage_metadata"):
                 _in = getattr(response.usage_metadata, "prompt_token_count", 0)
@@ -266,9 +283,11 @@ Assess business impact and prioritization for each item."""
             return []
         try:
             client = Groq(api_key=groq_key)
-            
+
             # Rewrite the prompt to ask for plain text instead of JSON
-            plain_text_prompt = prompt + """\n
+            plain_text_prompt = (
+                prompt
+                + """\n
 Instead of JSON, provide your response in EXACTLY this plain text format for each item:
 ID: <id>
 SCORE: <0-100>
@@ -277,17 +296,21 @@ QUICK: <true/false>
 SPRINT: <1, 2, or 3>
 JUSTIFY: <1-2 sentences>
 ---"""
-            
+            )
+
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": "You are a senior engineering manager prioritizing technical debt."},
+                    {
+                        "role": "system",
+                        "content": "You are a senior engineering manager prioritizing technical debt.",
+                    },
                     {"role": "user", "content": plain_text_prompt},
                 ],
                 temperature=0.1,
                 max_tokens=4000,
             )
-            
+
             # Record Groq tokens
             if hasattr(response, "usage"):
                 _in = getattr(response.usage, "prompt_tokens", 0)
@@ -295,9 +318,9 @@ JUSTIFY: <1-2 sentences>
                 self.token_usage["input"] += _in
                 self.token_usage["output"] += _out
                 self.token_usage["model_usage"]["groq"] += _in + _out
-                
+
             text = response.choices[0].message.content.strip()
-            
+
             # Parse the plain text response
             results = []
             current_item = {}
@@ -318,7 +341,9 @@ JUSTIFY: <1-2 sentences>
                     except ValueError:
                         current_item["business_impact_score"] = 50
                 elif line.startswith("BLOCKS:"):
-                    current_item["blocks_other_work"] = line[7:].strip().lower() == "true"
+                    current_item["blocks_other_work"] = (
+                        line[7:].strip().lower() == "true"
+                    )
                 elif line.startswith("QUICK:"):
                     current_item["quick_win"] = line[6:].strip().lower() == "true"
                 elif line.startswith("SPRINT:"):
@@ -328,12 +353,14 @@ JUSTIFY: <1-2 sentences>
                         current_item["recommended_sprint"] = 2
                 elif line.startswith("JUSTIFY:"):
                     current_item["business_justification"] = line[8:].strip()
-            
+
             # Catch the last item if no trailing dashes
             if current_item and "id" in current_item:
                 results.append(current_item)
-                
-            logger.info(f"AI enrichment completed via Groq (plain text parsed): {len(results)} items")
+
+            logger.info(
+                f"AI enrichment completed via Groq (plain text parsed): {len(results)} items"
+            )
             return results
         except Exception as e:
             logger.warning(f"Groq enrichment failed: {e}, falling back to Gemini")

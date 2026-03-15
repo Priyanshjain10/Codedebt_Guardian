@@ -1,17 +1,18 @@
 """
 Tests for the Debt Gateway webhook handler.
 """
+
 import hmac
 import hashlib
 import json
 import os
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_signature(body: bytes, secret: str) -> str:
     """Compute the correct HMAC-SHA256 signature for a webhook payload."""
@@ -25,15 +26,18 @@ def _get_test_client(webhook_secret: str = "test_secret"):
         # Re-import to pick up fresh env
         import importlib
         import api.webhook as wh_mod
+
         importlib.reload(wh_mod)
 
         from fastapi import FastAPI
+
         app = FastAPI()
         app.include_router(wh_mod.router)
         return TestClient(app), webhook_secret
 
 
 # ── Tests ────────────────────────────────────────────────────────────────
+
 
 class TestWebhookSignature:
     """Test HMAC-SHA256 signature verification."""
@@ -43,7 +47,9 @@ class TestWebhookSignature:
         client, secret = _get_test_client("test_secret_reject")
 
         body = json.dumps({"action": "opened"}).encode()
-        wrong_sig = "sha256=0000000000000000000000000000000000000000000000000000000000000000"
+        wrong_sig = (
+            "sha256=0000000000000000000000000000000000000000000000000000000000000000"
+        )
 
         response = client.post(
             "/webhook",

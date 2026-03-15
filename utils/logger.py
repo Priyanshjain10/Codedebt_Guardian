@@ -2,6 +2,7 @@ import logging
 import sys
 from pythonjsonlogger import jsonlogger
 
+
 def setup_structured_logging(level=logging.INFO):
     """
     Configures the root logger to output structured JSON logs.
@@ -16,11 +17,11 @@ def setup_structured_logging(level=logging.INFO):
 
     log_handler = logging.StreamHandler(sys.stdout)
     formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(levelname)s %(name)s %(message)s',
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
         rename_fields={
             "levelname": "level",
             "asctime": "timestamp",
-        }
+        },
     )
     log_handler.setFormatter(formatter)
     logger.addHandler(log_handler)

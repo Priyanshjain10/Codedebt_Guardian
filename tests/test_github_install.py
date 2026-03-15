@@ -4,11 +4,8 @@ Tests install redirect, callback, repo sync, and duplicate handling.
 """
 
 import uuid
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
-import pytest
-from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
 
 from models.db_models import GitHubInstallation
 
@@ -19,6 +16,7 @@ from models.db_models import GitHubInstallation
 def test_get_app_slug():
     """App slug helper should return configurable value."""
     from api.routes.github import _get_app_slug
+
     with patch.dict("os.environ", {"GITHUB_APP_SLUG": "test-app"}):
         assert _get_app_slug() == "test-app"
 
@@ -51,14 +49,18 @@ def test_fetch_installation_repos_pagination():
     page1 = MagicMock()
     page1.raise_for_status = MagicMock()
     page1.json.return_value = {
-        "repositories": [{"full_name": "org/repo1", "html_url": "https://github.com/org/repo1"}]
+        "repositories": [
+            {"full_name": "org/repo1", "html_url": "https://github.com/org/repo1"}
+        ]
     }
     page1.headers = {"Link": '<https://api.github.com/page2>; rel="next"'}
 
     page2 = MagicMock()
     page2.raise_for_status = MagicMock()
     page2.json.return_value = {
-        "repositories": [{"full_name": "org/repo2", "html_url": "https://github.com/org/repo2"}]
+        "repositories": [
+            {"full_name": "org/repo2", "html_url": "https://github.com/org/repo2"}
+        ]
     }
     page2.headers = {}
 

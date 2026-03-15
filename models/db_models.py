@@ -10,7 +10,6 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Enum,
     Float,
     ForeignKey,
     Index,
@@ -51,12 +50,18 @@ class Organization(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
-    teams = relationship("Team", back_populates="organization", cascade="all, delete-orphan")
+    teams = relationship(
+        "Team", back_populates="organization", cascade="all, delete-orphan"
+    )
     subscriptions = relationship("Subscription", back_populates="organization")
     api_keys = relationship("APIKeyModel", back_populates="organization")
     webhooks = relationship("Webhook", back_populates="organization")
     usage_logs = relationship("UsageLog", back_populates="organization")
-    github_installations = relationship("GitHubInstallation", back_populates="organization", cascade="all, delete-orphan")
+    github_installations = relationship(
+        "GitHubInstallation",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
 
 
 class User(Base):
@@ -80,35 +85,43 @@ class Team(Base):
     __tablename__ = "teams"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     name = Column(String(255), nullable=False)
     slug = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
     organization = relationship("Organization", back_populates="teams")
-    members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
-    projects = relationship("Project", back_populates="team", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        UniqueConstraint("org_id", "slug", name="uq_team_org_slug"),
+    members = relationship(
+        "TeamMember", back_populates="team", cascade="all, delete-orphan"
     )
+    projects = relationship(
+        "Project", back_populates="team", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_team_org_slug"),)
 
 
 class TeamMember(Base):
     __tablename__ = "team_members"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     role = Column(String(50), default="member")  # owner | admin | member | viewer
     joined_at = Column(DateTime(timezone=True), default=_utcnow)
 
     team = relationship("Team", back_populates="members")
     user = relationship("User", back_populates="team_memberships")
 
-    __table_args__ = (
-        UniqueConstraint("team_id", "user_id", name="uq_team_member"),
-    )
+    __table_args__ = (UniqueConstraint("team_id", "user_id", name="uq_team_member"),)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -120,7 +133,9 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False
+    )
     name = Column(String(255), nullable=False)
     repo_url = Column(String(500), nullable=False)
     default_branch = Column(String(100), default="main")
@@ -136,10 +151,14 @@ class Scan(Base):
     __tablename__ = "scans"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    project_id = Column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
+    )
     triggered_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     branch = Column(String(100), default="main")
-    status = Column(String(50), default="pending")  # pending | processing | completed | failed
+    status = Column(
+        String(50), default="pending"
+    )  # pending | processing | completed | failed
     scan_type = Column(String(20), default="repo")  # repo | pr
     pr_number = Column(Integer, nullable=True)
     debt_score = Column(Integer, nullable=True)
@@ -156,9 +175,13 @@ class Scan(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
     project = relationship("Project", back_populates="scans")
-    issues = relationship("ScanIssue", back_populates="scan", cascade="all, delete-orphan")
+    issues = relationship(
+        "ScanIssue", back_populates="scan", cascade="all, delete-orphan"
+    )
     ai_jobs = relationship("AIJob", back_populates="scan", cascade="all, delete-orphan")
-    pull_requests = relationship("PullRequest", back_populates="scan", cascade="all, delete-orphan")
+    pull_requests = relationship(
+        "PullRequest", back_populates="scan", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_scan_project_status", "project_id", "status"),
@@ -171,7 +194,9 @@ class ScanIssue(Base):
     __tablename__ = "scan_issues"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False)
+    scan_id = Column(
+        UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False
+    )
     type = Column(String(100), nullable=False)
     severity = Column(String(20), nullable=False)  # CRITICAL | HIGH | MEDIUM | LOW
     file_path = Column(String(500))
@@ -187,16 +212,16 @@ class ScanIssue(Base):
 
     scan = relationship("Scan", back_populates="issues")
 
-    __table_args__ = (
-        Index("ix_issue_scan_severity", "scan_id", "severity"),
-    )
+    __table_args__ = (Index("ix_issue_scan_severity", "scan_id", "severity"),)
 
 
 class FixProposalModel(Base):
     __tablename__ = "fix_proposals"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False)
+    scan_id = Column(
+        UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False
+    )
     issue_id = Column(UUID(as_uuid=True), ForeignKey("scan_issues.id"), nullable=True)
     issue_type = Column(String(100))
     problem_summary = Column(Text)
@@ -212,7 +237,9 @@ class PullRequest(Base):
     __tablename__ = "pull_requests"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False)
+    scan_id = Column(
+        UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False
+    )
     pr_number = Column(Integer)
     title = Column(String(500))
     html_url = Column(String(500))
@@ -232,9 +259,13 @@ class AIJob(Base):
     __tablename__ = "ai_jobs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=True)
+    scan_id = Column(
+        UUID(as_uuid=True), ForeignKey("scans.id", ondelete="CASCADE"), nullable=True
+    )
     job_type = Column(String(50))  # analysis | embedding | fix_generation | pr_creation
-    status = Column(String(50), default="queued")  # queued | processing | completed | failed
+    status = Column(
+        String(50), default="queued"
+    )  # queued | processing | completed | failed
     model_used = Column(String(100))
     tokens_input = Column(Integer, default=0)
     tokens_output = Column(Integer, default=0)
@@ -251,7 +282,11 @@ class CodeEmbedding(Base):
     __tablename__ = "code_embeddings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     file_path = Column(String(500))
     chunk_start = Column(Integer)
     chunk_end = Column(Integer)
@@ -261,7 +296,13 @@ class CodeEmbedding(Base):
 
     __table_args__ = (
         Index("ix_code_embeddings_project", "project_id"),
-        Index("ix_code_embeddings_embedding", "embedding", postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"embedding": "vector_cosine_ops"}),
+        Index(
+            "ix_code_embeddings_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
     )
 
 
@@ -274,7 +315,11 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
     plan = Column(String(50), default="free")
@@ -296,8 +341,14 @@ class APIKeyModel(Base):
     __tablename__ = "api_keys"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     key_prefix = Column(String(20), nullable=False)
     key_hash = Column(String(255), nullable=False, unique=True)
     label = Column(String(255), default="default")
@@ -313,7 +364,11 @@ class UsageLog(Base):
     __tablename__ = "usage_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     action = Column(String(100), nullable=False)
     metadata_ = Column("metadata", JSONB, default=dict)
@@ -326,7 +381,11 @@ class Webhook(Base):
     __tablename__ = "webhooks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     url = Column(String(500), nullable=False)
     secret_hash = Column(String(255))
     events = Column(JSONB, default=list)  # ["scan.completed", "fix.created", ...]
@@ -340,7 +399,11 @@ class GitHubInstallation(Base):
     __tablename__ = "github_installations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     installation_id = Column(Integer, unique=True, nullable=False, index=True)
     account_login = Column(String(255), nullable=False)  # GitHub user/org login
     account_type = Column(String(50), default="User")  # User | Organization

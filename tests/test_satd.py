@@ -3,18 +3,16 @@ Tests for the Advanced SATD (Self-Admitted Technical Debt) Detector.
 All Gemini API calls are mocked so tests run fast and offline.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-import json
-
 
 # ── Extraction Logic (no Gemini needed) ───────────────────────────────────────
+
 
 class TestSATDAnchorExtraction:
     """Test regex-based anchor extraction for Python and JS comment styles."""
 
     def setup_method(self):
         from tools.satd_detector import SATDDetector
+
         self.detector = SATDDetector()
 
     def test_extract_anchors_finds_all_markers(self):
@@ -88,11 +86,13 @@ const z = 3;
 
 # ── Full Scan with Static Fallback ──────────────────────────────────────────────
 
+
 class TestSATDScanStaticFallback:
     """Test the full scan pipeline with static keyword fallback."""
 
     def setup_method(self):
         from tools.satd_detector import SATDDetector
+
         self.detector = SATDDetector()
 
     def test_scan_with_static_fallback(self):
@@ -135,11 +135,11 @@ def query(user_input):
 """
         issues = self.detector.scan(code, "db.py")
         assert len(issues) == 2
-        
+
         # TODO -> HIGH, no specific category keywords -> Design_Debt
         assert issues[0]["type"] == "satd_design"
         assert issues[0]["severity"] == "HIGH"
-        
+
         # FIXME -> HIGH, 'fix'/'security'/'auth' -> Defect_Debt (defect takes precedence in if/elif block due to 'fix')
         assert issues[1]["type"] == "satd_defect"
         assert issues[1]["severity"] == "HIGH"

@@ -12,9 +12,7 @@ Unlike naive regex-based SAST tools, this module:
   4. Maps results to the project's standard issue dict schema
 """
 
-import json
 import logging
-import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -142,12 +140,25 @@ class SATDDetector:
 
         # False positives
         if any(w in comment_lower for w in ["informational", "feature request"]):
-            return {"category": "False_Positive", "severity": "LOW", "reason": "Looks like an informational comment."}
+            return {
+                "category": "False_Positive",
+                "severity": "LOW",
+                "reason": "Looks like an informational comment.",
+            }
 
         # Urgency/Severity parsing
-        high_urgency = ["hack", "fixme", "todo", "workaround", "kludge", "critical", "urgent", "security"]
+        high_urgency = [
+            "hack",
+            "fixme",
+            "todo",
+            "workaround",
+            "kludge",
+            "critical",
+            "urgent",
+            "security",
+        ]
         med_urgency = ["temp", "temporary", "quick fix", "dirty", "refactor"]
-        
+
         severity = "LOW"
         if any(w in comment_lower for w in high_urgency):
             severity = "HIGH"
@@ -156,9 +167,17 @@ class SATDDetector:
 
         # Category parsing
         category = "Design_Debt"
-        if "bug" in comment_lower or "defect" in comment_lower or "fix" in comment_lower:
+        if (
+            "bug" in comment_lower
+            or "defect" in comment_lower
+            or "fix" in comment_lower
+        ):
             category = "Defect_Debt"
-        elif "security" in comment_lower or "auth" in comment_lower or "unsafe" in comment_lower:
+        elif (
+            "security" in comment_lower
+            or "auth" in comment_lower
+            or "unsafe" in comment_lower
+        ):
             category = "Security_Debt"
         elif "test" in comment_lower or "mock" in comment_lower:
             category = "Test_Debt"
@@ -166,7 +185,7 @@ class SATDDetector:
         return {
             "category": category,
             "severity": severity,
-            "reason": "Categorized via static keyword fallback."
+            "reason": "Categorized via static keyword fallback.",
         }
 
     def _to_issue_dict(
