@@ -309,6 +309,7 @@ JUSTIFY: <1-2 sentences>
                 ],
                 temperature=0.1,
                 max_tokens=4000,
+                timeout=60,
             )
 
             # Record Groq tokens

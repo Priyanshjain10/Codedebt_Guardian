@@ -259,6 +259,7 @@ Provide a complete, production-ready fix."""
                 ],
                 temperature=0.1,
                 max_tokens=500,
+                timeout=30,
             )
 
             # Record Groq tokens

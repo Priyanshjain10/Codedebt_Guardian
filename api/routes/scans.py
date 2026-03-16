@@ -10,7 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -55,17 +55,26 @@ def _parse_scan_uuid(scan_id: str) -> UUID:
 
 
 class CreateScanRequest(BaseModel):
-    repo_url: str
-    branch: str = "main"
+    repo_url: str = Field(..., min_length=10, max_length=500, description="GitHub repository URL")
+    branch: str = Field(default="main", min_length=1, max_length=255)
     project_id: Optional[str] = None
     auto_fix: bool = False
-    max_prs: int = 3
+    max_prs: int = Field(default=3, ge=1, le=50, description="Max PRs to analyze")
+
+        @field_validator('repo_url')
+    @classmethod
+    def validate_github_url(cls, v: str) -> str:
+        import re
+        v = v.strip()
+        if not re.match(r'^https://github\.com/[\w.-]+/[\w.-]+', v):
+            raise ValueError('repo_url must be a valid GitHub repository URL (https://github.com/owner/repo)')
+        return v
 
 
 class ScanResponse(BaseModel):
     id: str
     status: str
-    repo_url: str
+    repo_url: str = Field(..., min_length=10, max_length=500, description="GitHub repository URL")
     branch: str
     summary: dict = {}
     duration_seconds: Optional[float] = None

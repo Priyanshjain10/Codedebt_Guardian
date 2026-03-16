@@ -438,7 +438,7 @@ def run_scan_analysis(self, scan_id: str, repo_url: str, branch: str = "main"):
         db.close()
 
 
-@celery_app.task(name="workers.tasks.generate_embeddings")
+@celery_app.task(bind=True, name="workers.tasks.generate_embeddings", max_retries=3, default_retry_delay=60)
 def generate_embeddings(
     scan_id: str, project_id: str, repo_url: str, branch: str = "main"
 ):
@@ -508,7 +508,7 @@ def generate_embeddings(
         )
 
 
-@celery_app.task(name="workers.tasks.create_fix_pr")
+@celery_app.task(bind=True, name="workers.tasks.create_fix_pr", max_retries=3, default_retry_delay=120)
 def create_fix_pr(repo_url: str, fix_proposal: dict, issue: dict, scan_id: str = ""):
     """Create a GitHub PR for a specific fix proposal."""
     try:
@@ -531,7 +531,7 @@ def create_fix_pr(repo_url: str, fix_proposal: dict, issue: dict, scan_id: str =
         return None
 
 
-@celery_app.task(name="workers.tasks.run_scheduled_scans")
+@celery_app.task(bind=True, name="workers.tasks.run_scheduled_scans", max_retries=2, default_retry_delay=300)
 def run_scheduled_scans():
     """Beat task: run scheduled autopilot scans for configured projects."""
     logger.info("Running scheduled scan check...")

@@ -53,6 +53,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=()"
         )
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+                        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss:; frame-ancestors 'none'"
         if not request.url.path.startswith("/api/v1/auth"):
             response.headers["Cache-Control"] = "no-store"
         return response
