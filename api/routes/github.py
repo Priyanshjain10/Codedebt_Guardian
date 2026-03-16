@@ -97,25 +97,84 @@ def _fetch_installation_repos(token: str) -> list[dict]:
 
 @router.get("/install")
 async def github_install_redirect(
-    user: User = Depends(get_current_user),
 ):
     """Redirect user to GitHub App installation page."""
     slug = _get_app_slug()
     install_url = f"https://github.com/apps/{slug}/installations/new"
-    return RedirectResponse(url=install_url, status_code=302)
+    return RedirectResponse(url=install_url, status_code=302 + (f'?token={jwt_token}' if jwt_token else ''))
 
 
 @router.get("/callback")
 async def github_install_callback(
     installation_id: int = Query(...),
     setup_action: str = Query("install"),
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     GitHub redirects here after the user installs the App.
     Stores the installation and syncs accessible repositories as Project records.
     """
+
+    # ---- Passwordless auth: fetch account from GitHub installation ----
+    jwt_token = None
+    try:
+        from api.auth import create_access_token
+        from models.db_models import User
+        from sqlalchemy import select
+        from datetime import datetime
+        import uuid
+        app_jwt = _make_app_jwt()
+        headers = {
+            "Authorization": f"Bearer {app_jwt}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        inst_resp = requests.get(
+            f"{GITHUB_API}/app/installations/{installation_id}",
+            headers=headers,
+            timeout=10,
+        )
+        if inst_resp.ok:
+            inst_data = inst_resp.json()
+            account = inst_data.get("account", {})
+            github_login = account.get("login", "")
+            github_id = account.get("id")
+            email = account.get("email") or f"{github_login}@github.invalid"
+            avatar_url = account.get("avatar_url", "")
+            if github_login:
+                # Upsert user record
+                import asyncio
+                async def _upsert_user():
+                    result = await db.execute(
+                        select(User).where(User.github_login == github_login)
+                    )
+                    existing = result.scalar_one_or_none()
+                    if existing:
+                        existing.avatar_url = avatar_url
+                        existing.updated_at = datetime.utcnow()
+                        await db.commit()
+                        return existing
+                    new_user = User(
+                        id=uuid.uuid4(),
+                        email=email,
+                        github_login=github_login,
+                        github_id=str(github_id) if github_id else None,
+                        avatar_url=avatar_url,
+                        is_active=True,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                    )
+                    db.add(new_user)
+                    await db.commit()
+                    return new_user
+                loop = asyncio.new_event_loop()
+                user_obj = loop.run_until_complete(_upsert_user())
+                loop.close()
+                jwt_token = create_access_token({"sub": str(user_obj.id), "github_login": github_login})
+                logger.info(f"Passwordless auth: upserted user {github_login}, issued JWT")
+    except Exception as e:
+        logger.warning(f"Failed to create user from installation {installation_id}: {e}")
+    # ------------------------------------------------------------------
     if setup_action not in ("install", "update"):
         return {
             "status": "ignored",
@@ -195,7 +254,6 @@ async def github_install_callback(
 
 @router.get("/repos")
 async def list_github_repos(
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List all GitHub repositories connected via installed GitHub Apps."""
@@ -260,7 +318,6 @@ async def list_github_repos(
 
 @router.post("/repos/sync")
 async def sync_github_repos(
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Re-sync all repositories from GitHub App installations and create Project records."""

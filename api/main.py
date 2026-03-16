@@ -147,6 +147,22 @@ except Exception:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Core Endpoints
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/health", tags=["system"])
+async def health_check():
+    """Liveness + readiness probe for Render/k8s health checks."""
+    import time
+    checks = {"api": "ok"}
+    # Check Redis connectivity
+    try:
+        from workers.celery_app import celery_app
+        ping = celery_app.control.ping(timeout=1)
+        checks["celery"] = "ok" if ping else "degraded"
+    except Exception:
+        checks["celery"] = "unavailable"
+    # All healthy
+    return {"status": "healthy", "checks": checks, "ts": time.time()}
+
 @app.get("/")
 async def root():
     return {

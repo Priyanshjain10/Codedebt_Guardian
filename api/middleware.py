@@ -1,11 +1,6 @@
-"""
-CodeDebt Guardian — API Middleware Stack
-Request IDs, security headers, structured error handling.
-"""
-
-import uuid
-import time
 import logging
+import time
+import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -18,59 +13,16 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     """Attach a unique X-Request-ID to every request/response."""
 
     async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        request_id = str(uuid.uuid4())
         request.state.request_id = request_id
-
-        start = time.perf_counter()
-        response = await call_next(request)
-        duration_ms = (time.perf_counter() - start) * 1000
-
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Response-Time"] = f"{duration_ms:.1f}ms"
-
-        logger.info(
-            "request",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status": response.status_code,
-                "duration_ms": round(duration_ms, 1),
-            },
-        )
-        return response
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add security headers to every response."""
-
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=()"
-        )
-                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-                        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss:; frame-ancestors 'none'"
-        if not request.url.path.startswith("/api/v1/auth"):
-            response.headers["Cache-Control"] = "no-store"
-        return response
-
-
-class ErrorHandlerMiddleware(BaseHTTPMiddleware):
-    """Catch unhandled exceptions and return structured JSON errors."""
-
-    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
         try:
-            return await call_next(request)
+            response = await call_next(request)
         except Exception as exc:
             request_id = getattr(request.state, "request_id", "unknown")
             logger.error(
-                f"Unhandled error: {exc}",
-                exc_info=True,
+                "Unhandled exception",
+                exc_info=exc,
                 extra={"request_id": request_id},
             )
             return JSONResponse(
@@ -81,3 +33,33 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     "request_id": request_id,
                 },
             )
+        process_time = time.time() - start_time
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time"] = str(process_time)
+        return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    CSP_POLICY = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' wss:; "
+        "frame-ancestors 'none'"
+    )
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = self.CSP_POLICY
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response

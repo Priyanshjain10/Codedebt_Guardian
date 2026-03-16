@@ -1,24 +1,26 @@
-"""
-Shared test fixtures for CodeDebt Guardian test suite.
-"""
-
 import os
+import sys
 
-# Set test environment variables before any imports
-os.environ.setdefault(
-    "SECRET_KEY", "a]1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"
-)
-os.environ.setdefault(
-    "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/codedebt_test"
-)
-os.environ.setdefault(
-    "DATABASE_SYNC_URL", "postgresql://test:test@localhost:5432/codedebt_test"
-)
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
-os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/14")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/13")
-os.environ.setdefault("GOOGLE_API_KEY", "")
-os.environ.setdefault("GROQ_API_KEY", "")
-os.environ.setdefault("OPENAI_API_KEY", "")
-os.environ.setdefault("GITHUB_TOKEN", "")
-os.environ.setdefault("STRIPE_SECRET_KEY", "")
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Set all required environment variables before any imports
+envs = {
+    'DATABASE_URL': 'sqlite+aiosqlite:///./test.db',
+    'REDIS_URL': 'redis://localhost:6379/0',
+    'SECRET_KEY': 'test-secret-key-for-ci-only-64chars-padding-here',
+    'JWT_ALGORITHM': 'HS256',
+    'GOOGLE_API_KEY': 'dummy-key',
+    'GROQ_API_KEY': 'dummy-key',
+    'GITHUB_APP_ID': '12345',
+    'GITHUB_APP_PRIVATE_KEY': 'dummy-private-key',
+    'GITHUB_WEBHOOK_SECRET': 'test-webhook-secret',
+    'ENVIRONMENT': 'testing',
+    'CELERY_BROKER_URL': 'redis://localhost:6379/0',
+    'CELERY_RESULT_BACKEND': 'redis://localhost:6379/0',
+    'CORS_ORIGINS': 'http://localhost:3000',
+    'STRIPE_SECRET_KEY': 'sk_test_dummy',
+    'STRIPE_WEBHOOK_SECRET': 'whsec_dummy',
+}
+for key, value in envs.items():
+    os.environ.setdefault(key, value)
