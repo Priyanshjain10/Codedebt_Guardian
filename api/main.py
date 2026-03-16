@@ -23,20 +23,6 @@ from api.middleware import (
     SecurityHeadersMiddleware,
     ErrorHandlerMiddleware,
 )
-from api.auth import (
-    RegisterRequest,
-    LoginRequest,
-    TokenResponse,
-    register_user,
-    login_user,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    get_current_user,
-)
-from database import get_db, init_db, close_db
-from services.audit import log_action
-
 from api.rate_limit import limiter
 
 from api.routes.scans import router as scans_router
@@ -229,7 +215,6 @@ async def health_ready():
 # ── Auth Endpoints ───────────────────────────────────────────────────────
 
 
-@app.post("/api/v1/auth/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db=Depends(get_db)):
     """Register a new user. Creates a default org + team automatically."""
     user, org = await register_user(req, db)
@@ -243,7 +228,6 @@ async def register(req: RegisterRequest, db=Depends(get_db)):
     )
 
 
-@app.post("/api/v1/auth/login", response_model=TokenResponse)
 async def login(req: LoginRequest, db=Depends(get_db)):
     """Login with email and password."""
     user, org_id = await login_user(req, db)
@@ -260,7 +244,6 @@ async def login(req: LoginRequest, db=Depends(get_db)):
     )
 
 
-@app.post("/api/v1/auth/refresh", response_model=TokenResponse)
 async def refresh_token(request: Request, db=Depends(get_db)):
     """Refresh an expired access token."""
     body = await request.json()
@@ -279,7 +262,6 @@ async def refresh_token(request: Request, db=Depends(get_db)):
     )
 
 
-@app.get("/api/v1/auth/me")
 async def get_me(user=Depends(get_current_user)):
     """Get current authenticated user profile."""
     return {

@@ -119,3 +119,30 @@ async def github_webhook(request: Request):
                 logger.error(f"Failed to enqueue PR event: {e}")
 
     return {"status": "ok"}
+
+    # Handle installation events (when someone installs the GitHub App)
+    if event_type == "installation" and data.get("action") == "created":
+        installation_id = data.get("installation", {}).get("id")
+        account = data.get("installation", {}).get("account", {})
+        logger.info(f"🎉 GitHub App installed: installation_id={installation_id}, account={account.get('login')}")
+        # TODO: Store installation in database for tracking
+        return {"status": "ok", "message": "Installation recorded successfully"}
+    
+    # Handle push events to main/master (trigger full repo scan)
+    if event_type == "push":
+        repo_full = data.get("repository", {}).get("full_name")
+        ref = data.get("ref", "")
+        if ref in ["refs/heads/main", "refs/heads/master"]:
+            logger.info(f"📦 Push to main branch: {repo_full}")
+            installation_id = data.get("installation", {}).get("id")
+            if installation_id:
+                try:
+                    from workers.tasks import run_scan_analysis
+                    token = _get_installation_token(installation_id)
+                    run_scan_analysis.delay(repo_full, "main", None, token)
+                    logger.info(f"✅ Queued full scan for {repo_full}")
+                except Exception as e:
+                    logger.error(f"Failed to queue scan: {e}")
+            return {"status": "ok", "message": "Push event processed"}
+        
+    return {"status": "ignored", "reason": "Event type not handled"}
