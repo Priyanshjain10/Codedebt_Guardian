@@ -24,7 +24,12 @@ from services.audit import log_action_sync
 
 logger = logging.getLogger(__name__)
 
-_redis = redis.from_url(settings.REDIS_URL)
+try:
+    _redis = redis.from_url(settings.REDIS_URL)
+except Exception as _redis_err:
+    import logging as _log
+    _log.getLogger(__name__).warning(f"Redis unavailable: {_redis_err}")
+    _redis = None
 
 
 def _publish_progress(scan_id: str, message: str, phase: str = "", percent: int = 0):
@@ -39,7 +44,8 @@ def _publish_progress(scan_id: str, message: str, phase: str = "", percent: int 
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
-    _redis.publish(f"scan:{scan_id}", event)
+    if _redis:
+        _redis.publish(f"scan:{scan_id}", event)
 
 
 def _publish_complete(scan_id: str, data: Dict[str, Any]):
@@ -53,7 +59,8 @@ def _publish_complete(scan_id: str, data: Dict[str, Any]):
         },
         default=str,
     )
-    _redis.publish(f"scan:{scan_id}", event)
+    if _redis:
+        _redis.publish(f"scan:{scan_id}", event)
 
 
 def _publish_error(scan_id: str, message: str):
@@ -66,7 +73,8 @@ def _publish_error(scan_id: str, message: str):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
-    _redis.publish(f"scan:{scan_id}", event)
+    if _redis:
+        _redis.publish(f"scan:{scan_id}", event)
 
 
 @celery_app.task(bind=True, name="workers.tasks.run_scan_analysis", max_retries=2)
@@ -529,3 +537,18 @@ def run_scheduled_scans():
     logger.info("Running scheduled scan check...")
     # In production: query projects with autopilot enabled, enqueue scan for each
     pass
+
+
+async def run_scan_task(scan_id: str, repo_url: str, branch: str = "main"):
+    """Async wrapper for scan pipeline - runs as FastAPI BackgroundTask."""
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    await loop.run_in_executor(executor, _run_scan_sync, scan_id, repo_url, branch)
+
+
+def _run_scan_sync(scan_id: str, repo_url: str, branch: str = "main"):
+    """Synchronous scan pipeline called from run_scan_task via thread executor."""
+    # Use Celery .apply() for synchronous eager execution in same process
+    run_scan_analysis.apply(args=[scan_id, repo_url, branch])

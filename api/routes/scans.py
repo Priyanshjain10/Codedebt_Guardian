@@ -8,7 +8,7 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
@@ -110,6 +110,7 @@ async def check_scan_quota(org_id: UUID, db: AsyncSession) -> None:
 @limiter.limit("5/minute")
 async def create_scan(
     request: Request,
+    background_tasks: BackgroundTasks,
     req: CreateScanRequest,
     user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
@@ -172,7 +173,7 @@ async def create_scan(
     # Create the scan record — project_id is now guaranteed non-null if authenticated and project context exists
     scan = Scan(
         project_id=project_id,
-        triggered_by=user.id,
+        triggered_by=user.id if user else None,
         branch=req.branch,
         status="queued",
     )
@@ -194,17 +195,9 @@ async def create_scan(
             },
         )
 
-    # Enqueue Celery task (graceful fallback to in-process for dev)
-    try:
-        from workers.tasks import run_scan_analysis
-
-        run_scan_analysis.delay(scan_id, req.repo_url, req.branch)
-    except Exception as celery_err:
-        logger.warning(
-            f"Celery unavailable ({celery_err}), marking scan as running for manual trigger"
-        )
-        scan.status = "running"
-        await db.flush()
+    # Enqueue scan as FastAPI background task (no Celery needed)
+    from workers.tasks import run_scan_task
+    background_tasks.add_task(run_scan_task, scan_id, req.repo_url, req.branch)
 
     return {
         "scan_id": scan_id,

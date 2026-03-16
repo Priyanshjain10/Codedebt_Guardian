@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 from pathlib import Path
 
-from .debt_detection_agent import DebtDetectionAgent, QuotaExhaustedError
-from .priority_ranking_agent import PriorityRankingAgent
-from .fix_proposal_agent import FixProposalAgent
+from agents.debt_detection_agent import DebtDetectionAgent, QuotaExhaustedError
+from agents.priority_ranking_agent import PriorityRankingAgent
+from agents.fix_proposal_agent import FixProposalAgent
 from tools.persistent_memory import PersistentMemoryBank
 from tools.memory_bank import MemoryBank
 from tools.observability import ObservabilityLayer
