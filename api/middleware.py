@@ -63,3 +63,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "max-age=31536000; includeSubDomains"
             )
         return response
+
+
+class ErrorHandlerMiddleware(BaseHTTPMiddleware):
+    """Catch unhandled exceptions and return structured JSON errors."""
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            request_id = getattr(request.state, "request_id", "unknown")
+            logger.error(
+                f"Unhandled error: {exc}",
+                exc_info=True,
+                extra={"request_id": request_id},
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "internal_server_error",
+                    "message": "An unexpected error occurred. Please try again.",
+                    "request_id": request_id,
+                },
+            )
