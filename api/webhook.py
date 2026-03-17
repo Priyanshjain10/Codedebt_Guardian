@@ -113,7 +113,7 @@ async def github_webhook(request: Request):
         if installation_id:
             try:
                 token = _get_installation_token(installation_id)
-                process_pr_event.delay(repo_full, pr_number, token)
+                _background_pr_task(repo_full, pr_number, installation_id)
                 logger.info(f"Enqueued process_pr_event for {repo_full}#{pr_number}")
             except Exception as e:
                 logger.error(f"Failed to enqueue PR event: {e}")

@@ -553,4 +553,4 @@ async def run_scan_task(scan_id: str, repo_url: str, branch: str = "main"):
 def _run_scan_sync(scan_id: str, repo_url: str, branch: str = "main"):
     """Synchronous scan pipeline called from run_scan_task via thread executor."""
     # Use Celery .apply() for synchronous eager execution in same process
-    run_scan_analysis.apply(args=[scan_id, repo_url, branch])
+    run_scan_analysis(scan_id, repo_url, branch)
