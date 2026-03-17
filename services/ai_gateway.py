@@ -150,6 +150,13 @@ class TokenMeter:
 
     def __init__(self):
         self._usage: Dict[str, Dict[str, int]] = {}
+        try:
+            import redis as _r
+            from config import settings
+            self._redis = _r.from_url(settings.REDIS_URL, decode_responses=True)
+            self._redis.ping()
+        except Exception:
+            self._redis = None
 
     def record(
         self, org_id: str, model: str, input_tokens: int, output_tokens: int
@@ -160,6 +167,15 @@ class TokenMeter:
         self._usage[key]["input"] += input_tokens
         self._usage[key]["output"] += output_tokens
         self._usage[key]["calls"] += 1
+        if getattr(self, "_redis", None):
+            try:
+                rk = f"token_meter:{key}"
+                self._redis.hincrby(rk, "input", input_tokens)
+                self._redis.hincrby(rk, "output", output_tokens)
+                self._redis.hincrby(rk, "calls", 1)
+                self._redis.expire(rk, 86400 * 30)
+            except Exception:
+                pass
 
     def get_usage(self, org_id: str) -> Dict[str, Any]:
         result = {}
