@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
-    SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
+    SECRET_KEY: str = "dev-secret-key-replace-in-production-minimum-32ch"
 
     @field_validator("SECRET_KEY")
     @classmethod
