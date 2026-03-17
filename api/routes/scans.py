@@ -61,7 +61,7 @@ class CreateScanRequest(BaseModel):
     auto_fix: bool = False
     max_prs: int = Field(default=3, ge=1, le=50, description="Max PRs to analyze")
 
-        @field_validator('repo_url')
+    @field_validator('repo_url')
     @classmethod
     def validate_github_url(cls, v: str) -> str:
         import re
