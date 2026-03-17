@@ -10,13 +10,15 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        if (hasHydrated && !isAuthenticated) {
             router.replace('/login');
         }
-    }, [isAuthenticated, router]);
+    }, [hasHydrated, isAuthenticated, router]);
 
+    if (!hasHydrated) return null;
     if (!isAuthenticated) return null;
 
     return (
