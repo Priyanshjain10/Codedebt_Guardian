@@ -28,6 +28,7 @@ try:
     _redis = redis.from_url(settings.REDIS_URL)
 except Exception as _redis_err:
     import logging as _log
+
     _log.getLogger(__name__).warning(f"Redis unavailable: {_redis_err}")
     _redis = None
 
@@ -543,6 +544,7 @@ async def run_scan_task(scan_id: str, repo_url: str, branch: str = "main"):
     """Async wrapper for scan pipeline - runs as FastAPI BackgroundTask."""
     import asyncio
     import concurrent.futures
+
     loop = asyncio.get_event_loop()
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     await loop.run_in_executor(executor, _run_scan_sync, scan_id, repo_url, branch)

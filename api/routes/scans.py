@@ -8,7 +8,15 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Query,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
@@ -197,6 +205,7 @@ async def create_scan(
 
     # Enqueue scan as FastAPI background task (no Celery needed)
     from workers.tasks import run_scan_task
+
     background_tasks.add_task(run_scan_task, scan_id, req.repo_url, req.branch)
 
     return {

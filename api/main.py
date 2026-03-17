@@ -152,8 +152,9 @@ async def root():
     return {
         "service": "CodeDebt Guardian API",
         "status": "running",
-        "docs": "/api/docs"
+        "docs": "/api/docs",
     }
+
 
 @app.get("/health/live")
 async def health_live():
