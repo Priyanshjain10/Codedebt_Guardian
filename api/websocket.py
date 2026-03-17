@@ -169,6 +169,7 @@ async def dashboard_websocket(
     """WebSocket for live dashboard updates (org-scoped)."""
     user_payload = _verify_ws_token(token)
     if not user_payload:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         return
 

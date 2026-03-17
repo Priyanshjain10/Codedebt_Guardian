@@ -44,7 +44,7 @@ def _get_auth_key(request: Request) -> str:
     """Key function for authenticated rate limits — keyed by Bearer token."""
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        return f"auth:{auth[7:20]}"  # Use first 13 chars of token as key
+        return f"auth:{auth[7:39]}"  # Use 32 chars for sufficient entropy
     return get_remote_address(request)
 
 
@@ -202,6 +202,10 @@ async def create_scan(
                 "branch": req.branch,
             },
         )
+
+    # Commit BEFORE adding background task to prevent race condition
+    # (background task uses SyncSession and reads DB immediately)
+    await db.commit()
 
     # Enqueue scan as FastAPI background task (no Celery needed)
     from workers.tasks import run_scan_task

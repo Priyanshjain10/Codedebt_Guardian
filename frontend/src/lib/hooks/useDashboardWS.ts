@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/store/authStore';
 
 export function useDashboardWS(orgId: string | undefined | null) {
     const queryClient = useQueryClient();
     const wsRef = useRef<WebSocket | null>(null);
+    const accessToken = useAuthStore((s) => s.accessToken);
 
     useEffect(() => {
-        if (!orgId) return;
+        if (!orgId || !accessToken) return;
 
         let reconnectTimeout: ReturnType<typeof setTimeout>;
         let isConnecting = false;
@@ -16,7 +18,7 @@ export function useDashboardWS(orgId: string | undefined | null) {
             isConnecting = true;
 
             const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
-            const ws = new WebSocket(`${wsUrl}/ws/dashboard/${orgId}`);
+            const ws = new WebSocket(`${wsUrl}/ws/dashboard/${orgId}?token=${accessToken}`);
 
             ws.onopen = () => {
                 isConnecting = false;
@@ -58,5 +60,5 @@ export function useDashboardWS(orgId: string | undefined | null) {
                 wsRef.current = null;
             }
         };
-    }, [orgId, queryClient]);
+    }, [orgId, accessToken, queryClient]);
 }
