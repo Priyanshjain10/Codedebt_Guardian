@@ -171,7 +171,7 @@ async def health_ready():
 
     # Database
     try:
-        from database import async_engine
+        from database import async_engine, get_db
         from sqlalchemy import text
 
         async with async_engine.connect() as conn:
