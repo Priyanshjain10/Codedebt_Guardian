@@ -523,7 +523,7 @@ No markdown, no backticks, no explanation. Change only the minimum necessary to 
 
 ---
 
-{"[View Full Scan Report on CodeDebt Guardian](https://app.codedebt.dev/scans/" + scan_id + ")" if scan_id else "Opened automatically by CodeDebt Guardian"}
+{"[View Full Scan Report on CodeDebt Guardian](https://codedebt-guardian.vercel.app/scans/" + scan_id + ")" if scan_id else "Opened automatically by CodeDebt Guardian"}
 *⭐ If this helped, please star the repo!*
 """
 

@@ -344,7 +344,7 @@ def process_pr_event(repo_full: str, pr_number: int, token: str):
 ---
 
 View full report:
-https://codedebt-guardian.app/scans/{scan_id}"""
+https://codedebt-guardian.vercel.app/scans/{scan_id}"""
 
         post_or_update_pr_comment(repo_full, pr_number, body, token)
 
