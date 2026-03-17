@@ -65,6 +65,10 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         try:
             return await call_next(request)
         except Exception as exc:
+            from starlette.exceptions import HTTPException as StarletteHTTPException
+            from fastapi.exceptions import RequestValidationError
+            if isinstance(exc, (StarletteHTTPException, RequestValidationError)):
+                raise
             request_id = getattr(request.state, "request_id", "unknown")
             logger.error(
                 f"Unhandled error: {exc}",

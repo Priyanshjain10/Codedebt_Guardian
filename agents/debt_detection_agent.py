@@ -46,6 +46,7 @@ class QuotaExhaustedError(Exception):
     pass
 
 
+_js_analyzer = None
 try:
     from tools.js_analyzer import JavaScriptAnalyzer
 
@@ -404,7 +405,24 @@ class DebtDetectionAgent:
 
         all_ai_issues = []
 
-        files_to_analyze = [f for f in files if f.get("issues")][:10]
+        # Use files that have static debt markers, fallback to first 10
+        files_with_static_debt = {
+            iss.get("location", "").split(":")[0]
+            for iss in files
+            if isinstance(iss, dict) and iss.get("location")
+        }
+        if files_with_static_debt:
+            files_to_analyze = [
+                f for f in files
+                if isinstance(f, dict) and f.get("name") in files_with_static_debt
+            ][:10]
+            if len(files_to_analyze) < 5:
+                already = {f.get("name") for f in files_to_analyze if isinstance(f, dict)}
+                for f in files:
+                    if isinstance(f, dict) and f.get("name") not in already and len(files_to_analyze) < 5:
+                        files_to_analyze.append(f)
+        else:
+            files_to_analyze = [f for f in files if isinstance(f, dict)][:10]
 
         for f in files_to_analyze:
             content = GitHubTool.read_file_content(f)
