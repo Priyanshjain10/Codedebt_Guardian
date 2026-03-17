@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeDebt Guardian — Eliminate Technical Debt Autonomously</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Cabinet+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="particle-canvas"></canvas>
+<div class="noise-overlay"></div>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <div class="brand-logo"><i class="fa-solid fa-shield-halved"></i></div>
+      CODEDEBT<span class="brand-accent"> GUARDIAN</span>
+    </a>
+    <div class="nav-links" id="nav-links">
+      <a href="#gate" class="nav-link">Platform</a>
+      <a href="#gate" class="nav-link nav-link-badge">Debt Gate <span class="nbadge">NEW</span></a>
+      <a href="#hero-scan" class="nav-cta-btn" id="nav-cta">Scan Repo →</a>
+    </div>
+    <button class="hamburger" id="nav-hamburger"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-glow-1"></div>
+  <div class="hero-glow-2"></div>
+
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    AI-Powered · GitHub Native · Zero Config
+  </div>
+
+  <h1 class="hero-h1">
+    <span class="h1-line-a">Eliminate Technical Debt.</span>
+    <span class="h1-line-b">
+      <span class="h1-gradient">Autonomously.</span>
+    </span>
+  </h1>
+
+  <p class="hero-p">
+    AI agents that detect, price, and patch your worst technical debt<br class="br-desktop">
+    by opening real, ready-to-merge GitHub Pull Requests.
+  </p>
+
+  <div class="scan-widget" id="hero-scan">
+    <div class="scan-inner" id="scan-box">
+      <div class="scan-row">
+        <i class="fa-brands fa-github scan-icon"></i>
+        <input id="repo-url" type="text" placeholder="https://github.com/owner/repo" autocomplete="off" spellcheck="false">
+        <button class="scan-submit" id="scan-btn">
+          <span id="scan-btn-label">Analyze Codebase</span>
+          <i class="fa-solid fa-arrow-right" id="scan-btn-icon"></i>
+        </button>
+      </div>
+      <div class="scan-meta">
+        <span class="scan-hint-text">Test drive: </span>
+        <button id="demo-fill" class="demo-btn">Priyanshjain10/codedebt-guardian</button>
+        <button id="btn-share" class="share-pill hidden"><i class="fa-solid fa-link"></i> Copy scan link</button>
+      </div>
+    </div>
+    <div id="wake-banner" class="wake-banner hidden">
+      <div class="wake-spinner"></div>
+      Waking analysis engine (Render cold start ~30s)…
+    </div>
+  </div>
+
+  <div class="hero-metrics">
+    <div class="hm-item"><div class="hm-num" data-count="10">0</div><div class="hm-label">Anti-patterns</div></div>
+    <div class="hm-sep"></div>
+    <div class="hm-item"><div class="hm-num hm-dollar">$0</div><div class="hm-label">Detection cost</div></div>
+    <div class="hm-sep"></div>
+    <div class="hm-item"><div class="hm-num">Auto</div><div class="hm-label">PRs opened</div></div>
+    <div class="hm-sep"></div>
+    <div class="hm-item"><div class="hm-num" data-count="109">0</div><div class="hm-label">Tests passing</div></div>
+  </div>
+</section>
+
+<!-- DEBT GATE SECTION -->
+<section class="gate-section" id="gate">
+  <div class="gate-wrap">
+    <div class="gate-left">
+      <div class="section-label">ENTERPRISE GUARDRAIL</div>
+      <h2 class="gate-h2">Debt Gate<br>for GitHub</h2>
+      <p class="gate-p">Stop technical debt before it merges. Install the GitHub App to automatically block any Pull Request that exceeds your team's configured Debt Budget.</p>
+      <a href="https://github.com/apps/codedebt-guardian" target="_blank" class="gate-cta">
+        Install GitHub App <i class="fa-solid fa-arrow-right"></i>
+      </a>
+    </div>
+    <div class="gate-right">
+      <div class="mock-window">
+        <div class="mock-titlebar">
+          <div class="mock-dots"><i></i><i></i><i></i></div>
+          <span>github.com / pull / 47</span>
+        </div>
+        <div class="mock-content">
+          <div class="mock-pr-row">
+            <i class="fa-solid fa-code-pull-request" style="color:#3fb950;font-size:14px;"></i>
+            <strong>feat: add payment gateway</strong>
+          </div>
+          <div class="mock-check-row">
+            <div class="mock-fail-icon"><i class="fa-solid fa-xmark"></i></div>
+            <div>
+              <div class="mock-check-title">CodeDebt Guardian — Pull Request blocked</div>
+              <div class="mock-check-sub">Introduces $450 in new debt (Budget: $200)</div>
+            </div>
+          </div>
+          <div class="mock-debt-bar">
+            <div class="mock-debt-fill" style="width:100%"></div>
+            <div class="mock-debt-budget"></div>
+          </div>
+          <div class="mock-bar-labels">
+            <span style="color:#f43f5e;">$450 introduced</span>
+            <span>Budget: $200</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ANALYSIS RESULTS -->
+<section class="results-wrap hidden" id="results-section">
+
+  <!-- Terminal -->
+  <div class="terminal hidden" id="progress-wrap">
+    <div class="term-header">
+      <div class="term-dots"><i></i><i></i><i></i></div>
+      <span class="term-title">codedebt-guardian — analysis stream</span>
+      <span class="term-live"><span class="term-live-dot"></span>LIVE</span>
+    </div>
+    <div class="term-body" id="progress-log"></div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-state" class="error-card hidden">
+    <i class="fa-solid fa-circle-xmark error-icon-big"></i>
+    <h3>Analysis Failed</h3>
+    <p>Connection lost. The engine may be cold — try again in a few seconds.</p>
+    <button id="retry-btn" class="gate-cta" style="margin-top:1.5rem;">Retry Scan</button>
+  </div>
+
+  <!-- Skeleton -->
+  <div id="skeleton-wrap" class="dash-grid hidden">
+    <div class="skel s-grade"></div>
+    <div class="skel s-stats"></div>
+    <div class="skel s-cost"></div>
+    <div class="skel s-main"></div>
+  </div>
+
+  <!-- Results Dashboard -->
+  <div id="results-dashboard" class="dash-grid hidden">
+
+    <!-- Grade Card -->
+    <div class="dash-card dc-grade">
+      <div class="dc-label">Health Grade</div>
+      <div id="grade-wrap" class="grade-content"></div>
+    </div>
+
+    <!-- Stats Card -->
+    <div class="dash-card dc-stats">
+      <div class="dc-label">Scan Metadata</div>
+      <div id="summary-stats" class="stats-rows"></div>
+    </div>
+
+    <!-- Cost Card -->
+    <div class="dash-card dc-cost">
+      <div class="dc-label">Total Remediation Cost</div>
+      <div id="debt-total-wrap" class="cost-content"></div>
+    </div>
+
+    <!-- Tabbed Main Card -->
+    <div class="dash-card dc-main">
+      <div class="tab-row" id="tab-bar">
+        <button class="tab-btn active" data-tab="ledger">
+          <i class="fa-solid fa-table-list"></i> Financial Ledger
+        </button>
+        <button class="tab-btn" data-tab="hotspots">
+          <i class="fa-solid fa-fire-flame-curved"></i> Hotspots
+        </button>
+        <button class="tab-btn" data-tab="fixes">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Fix Proposals
+          <span id="fixes-count" class="fix-badge"></span>
+        </button>
+      </div>
+      <div class="tab-panel" id="panel-ledger" style="display:block;"></div>
+      <div class="tab-panel" id="panel-hotspots" style="display:none;"></div>
+      <div class="tab-panel" id="panel-fixes" style="display:none;"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="results-actions">
+      <button id="btn-report" class="res-btn res-secondary">
+        <i class="fa-solid fa-file-pdf"></i> Download CTO Report
+      </button>
+      <button id="btn-autofix" class="res-btn res-primary">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Fix Top 3 Issues
+      </button>
+    </div>
+
+    <div id="autofix-results" class="autofix-results hidden"></div>
+  </div>
+
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <span class="footer-logo">CODEDEBT GUARDIAN</span>
+    <a href="https://github.com/Priyanshjain10/codedebt-guardian" target="_blank" class="footer-gh">
+      <i class="fa-brands fa-github"></i> Open Source
+    </a>
+  </div>
+</footer>
+
+<div id="toast-root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

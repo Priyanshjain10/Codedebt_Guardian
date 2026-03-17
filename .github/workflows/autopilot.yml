@@ -1,0 +1,35 @@
+name: CodeDebt Guardian AutoPilot
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run AutoPilot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/run_autopilot.py
