@@ -52,26 +52,25 @@ export function useScanWebSocket(
 
         ws.onmessage = ({ data }) => {
             try {
-                const msg: WSScanMessage = JSON.parse(data);
-                switch (msg.type) {
-                    case 'progress':
-                        setStage(msg.stage);
-                        setPct(msg.pct);
-                        setMessages((prev) => [...prev, msg.message]);
-                        break;
-                    case 'completed':
-                        if (!completedRef.current) {
-                            completedRef.current = true;
-                            onComplete(msg.summary);
-                        }
-                        break;
-                    case 'error':
-                        setError(msg.message);
-                        break;
-                    case 'heartbeat':
-                    case 'connected':
-                        break;
+                const raw = JSON.parse(data);
+                // Normalize both old (scan.progress) and new (progress) message formats
+                const msgType = raw.type;
+                if (msgType === 'progress' || msgType === 'scan.progress') {
+                    const stage = (raw.stage || raw.phase || 'detection') as WSProgressStage;
+                    const pct = raw.pct ?? raw.percent ?? 0;
+                    setStage(stage);
+                    setPct(pct);
+                    if (raw.message) setMessages((prev) => [...prev, raw.message]);
+                } else if (msgType === 'completed' || msgType === 'scan.complete') {
+                    if (!completedRef.current) {
+                        completedRef.current = true;
+                        const summary = raw.summary || raw.data?.summary || {};
+                        onComplete(summary);
+                    }
+                } else if (msgType === 'error' || msgType === 'scan.error') {
+                    setError(raw.message || 'Scan failed');
                 }
+                // heartbeat and connected are silently ignored
             } catch {
                 // Ignore parse errors
             }

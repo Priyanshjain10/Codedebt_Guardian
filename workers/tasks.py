@@ -37,11 +37,11 @@ def _publish_progress(scan_id: str, message: str, phase: str = "", percent: int 
     """Publish scan progress event to Redis pub/sub for WebSocket relay."""
     event = json.dumps(
         {
-            "type": "scan.progress",
+            "type": "progress",
             "scan_id": scan_id,
-            "phase": phase,
+            "stage": phase,
+            "pct": percent,
             "message": message,
-            "percent": percent,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -53,8 +53,9 @@ def _publish_complete(scan_id: str, data: Dict[str, Any]):
     """Publish scan completion event."""
     event = json.dumps(
         {
-            "type": "scan.complete",
+            "type": "completed",
             "scan_id": scan_id,
+            "summary": data.get("summary", {}),
             "data": data,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
@@ -68,7 +69,7 @@ def _publish_error(scan_id: str, message: str):
     """Publish scan error event."""
     event = json.dumps(
         {
-            "type": "scan.error",
+            "type": "error",
             "scan_id": scan_id,
             "message": message,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -192,7 +193,7 @@ def run_scan_analysis(self, scan_id: str, repo_url: str, branch: str = "main"):
             total_files = len(file_dicts)
 
             # Using ThreadPool inside Celery worker for IO-bound AST/LLM ops
-            max_workers = min(32, (os.cpu_count() or 1) * 4)
+            max_workers = min(8, (os.cpu_count() or 1) * 2)  # Capped to prevent OOM
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Helper to process a single file via the agent
                 def scan_file(file_info):
@@ -489,8 +490,11 @@ def generate_embeddings(
                         pass
 
             if files_to_embed:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("closed")
+                except RuntimeError:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 loop.run_until_complete(

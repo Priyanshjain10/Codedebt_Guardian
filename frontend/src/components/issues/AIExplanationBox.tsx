@@ -66,10 +66,12 @@ export function AIExplanationBox({ issue, fix }: AIExplanationBoxProps) {
                         <div className="flex-1 h-1 rounded-full bg-bg-card-2 overflow-hidden">
                             <div
                                 className="h-full rounded-full bg-brand"
-                                style={{ width: `${Math.round(issue.confidence * 100)}%` }}
+                                style={{ width: `${isNaN(issue.confidence) ? 0 : issue.confidence > 1 ? Math.round(issue.confidence) : Math.round(issue.confidence * 100)}%` }}
                             />
                         </div>
-                        <span className="text-text-1 font-mono text-[10px]">{Math.round(issue.confidence * 100)}%</span>
+                        <span className="text-text-1 font-mono text-[10px]">
+                            {isNaN(issue.confidence) ? 'N/A' : `${issue.confidence > 1 ? Math.round(issue.confidence) : Math.round(issue.confidence * 100)}%`}
+                        </span>
                     </div>
                 </div>
             </div>

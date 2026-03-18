@@ -34,16 +34,15 @@ export default function NewScanWizardPage() {
     // Step 3 state
     const [scanId, setScanId] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [scanCompleted, setScanCompleted] = useState(false);
 
     /** Per user correction #3: WS only opens when scanId != null */
     const onComplete = useCallback(
         (summary: ScanSummary) => {
-            toast.success(`Scan complete — ${summary.total_issues} issues found`);
-            if (scanId) {
-                setTimeout(() => router.push(`/scans/${scanId}/issues`), 500);
-            }
+            setScanCompleted(true);
+            toast.success(`Scan complete — ${summary?.total_issues ?? 0} issues found`);
         },
-        [scanId, router],
+        [],
     );
 
     const { stage, pct, messages, error: wsError } = useScanWebSocket(scanId, onComplete);
@@ -257,6 +256,24 @@ export default function NewScanWizardPage() {
                                 transition={{ duration: 0.3 }}
                             />
                         </div>
+
+                        {/* Completion CTA */}
+                        {scanCompleted && scanId && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-col items-center gap-3 p-4 bg-brand/5 border border-brand/20 rounded-lg"
+                            >
+                                <CheckCircle2 className="w-8 h-8 text-brand" />
+                                <p className="text-sm font-medium text-text-1">Scan Complete!</p>
+                                <button
+                                    onClick={() => router.push(`/scans/${scanId}/issues`)}
+                                    className="w-full h-9 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors flex items-center justify-center gap-2"
+                                >
+                                    View Results <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </motion.div>
+                        )}
 
                         {/* Log feed */}
                         {messages.length > 0 && (
