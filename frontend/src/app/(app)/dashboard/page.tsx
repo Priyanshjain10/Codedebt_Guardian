@@ -55,7 +55,7 @@ function ScanPipelineViz({ latestScan }: { latestScan: Scan | null }) {
         if (!latestScan?.summary) return '—';
         const s = latestScan.summary;
         switch (stageId) {
-            case 'repo': return latestScan.repo_url.split('/').slice(-1)[0] ?? 'Repo';
+            case 'repo': return (latestScan.repo_url ?? '').split('/').slice(-1)[0] || 'Repo';
             case 'detection': return `${s.total_issues ?? 0} issues`;
             case 'ranking': return `${s.critical ?? 0} critical`;
             case 'fixes': return `${s.fixes_proposed ?? 0} fixes`;
@@ -141,7 +141,7 @@ function DebtHeatmap({ hotspots }: { hotspots: Hotspot[] }) {
                             title={`${h.file_path} — ${h.issue_count} issues`}
                         >
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-bg-card border border-border rounded px-2 py-1 text-[10px] text-text-1 whitespace-nowrap opacity-0 group-hover:opacity-100 z-10 pointer-events-none transition-opacity shadow-lg">
-                                <p className="font-mono text-text-code">{h.file_path.split('/').pop()}</p>
+                                <p className="font-mono text-text-code">{(h.file_path ?? '').split('/').pop()}</p>
                                 <p className="text-text-3">{h.issue_count} issues</p>
                             </div>
                         </div>
@@ -248,7 +248,7 @@ function RecentScansTable({ scans }: { scans: Scan[] }) {
                     >
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-text-1 truncate font-mono">
-                                {scan.repo_url?.replace('https://github.com/', '') ?? scan.id.slice(0, 8)}
+                                {(scan.repo_url ?? '').replace('https://github.com/', '') || scan.id.slice(0, 8)}
                             </p>
                             <p className="text-[10px] text-text-3">{scan.branch} · {relativeTime(scan.created_at)}</p>
                         </div>

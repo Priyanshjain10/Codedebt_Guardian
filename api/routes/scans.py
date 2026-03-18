@@ -229,7 +229,8 @@ async def list_scans(
     status: Optional[str] = None,
 ):
     """List scans triggered by the authenticated user."""
-    query = select(Scan).where(Scan.triggered_by == user.id)
+    from sqlalchemy.orm import selectinload
+    query = select(Scan).options(selectinload(Scan.project)).where(Scan.triggered_by == user.id)
     if status:
         query = query.where(Scan.status == status)
     query = query.order_by(Scan.created_at.desc()).offset(offset).limit(limit)
@@ -252,6 +253,7 @@ async def list_scans(
                 "summary": s.summary or {},
                 "duration_seconds": s.duration_seconds,
                 "created_at": s.created_at.isoformat() if s.created_at else "",
+                "repo_url": s.project.repo_url if s.project else "",
             }
             for s in scans
         ],
@@ -296,6 +298,7 @@ async def get_latest_scan(
         "duration_seconds": scan.duration_seconds,
         "created_at": scan.created_at.isoformat() if scan.created_at else "",
         "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
+        "repo_url": scan.project.repo_url if scan.project else "",
     }
 
 
@@ -326,7 +329,10 @@ async def get_scan(
     db: AsyncSession = Depends(get_db),
 ):
     """Get full scan results by ID."""
-    result = await db.execute(select(Scan).where(Scan.id == _parse_scan_uuid(scan_id)))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Scan).options(selectinload(Scan.project)).where(Scan.id == _parse_scan_uuid(scan_id))
+    )
     scan = result.scalar_one_or_none()
 
     if not scan:
@@ -348,6 +354,7 @@ async def get_scan(
         "duration_seconds": scan.duration_seconds,
         "created_at": scan.created_at.isoformat() if scan.created_at else "",
         "completed_at": scan.completed_at.isoformat() if scan.completed_at else None,
+        "repo_url": scan.project.repo_url if scan.project else "",
     }
 
 
