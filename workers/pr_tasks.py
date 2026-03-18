@@ -380,3 +380,20 @@ https://codedebt-guardian.app/scans/{scan_id}"""
                     logger.info(f"Auto-fix PR created: {auto_pr.get('html_url')}")
             except Exception as e:
                 logger.warning(f"Auto-fix failed for {issue.get('type')}: {e}")
+
+
+async def process_pr_event_bg(repo_full: str, pr_number: int, installation_id: int) -> None:
+    """Background coroutine for processing PR events. Never raises."""
+    try:
+        from tools.github_tool import GitHubTool
+        from database import SyncSessionLocal
+        import logging as _log
+        _logger = _log.getLogger(__name__)
+        _logger.info(f"Processing PR event: {repo_full}#{pr_number}")
+        # TODO: Implement debt inheritance mapping
+        # 1. Get modified files from PR
+        # 2. Query existing debt issues for those files
+        # 3. Post comment with inherited debt burden
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).error(f"PR event processing failed: {e}")

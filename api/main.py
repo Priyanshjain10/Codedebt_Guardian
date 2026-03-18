@@ -218,7 +218,10 @@ async def health_ready():
 async def register(req: RegisterRequest, db=Depends(get_db)):
     """Register a new user. Creates a default org + team automatically."""
     user, org = await register_user(req, db)
-    await log_action(db, org.id, user.id, "user.registered", {"email": req.email})
+    try:
+        await log_action(db, org.id, user.id, "user.registered", {"email": req.email})
+    except Exception as audit_err:
+        logger.warning(f"Register audit skipped: {audit_err}")
     access = create_access_token(str(user.id), str(org.id))
     refresh = create_refresh_token(str(user.id))
     return TokenResponse(
@@ -233,9 +236,15 @@ async def login(req: LoginRequest, db=Depends(get_db)):
     """Login with email and password."""
     user, org_id = await login_user(req, db)
     if org_id:
-        from uuid import UUID as _UUID
-
-        await log_action(db, _UUID(org_id), user.id, "user.login", {"email": req.email})
+        try:
+            from uuid import UUID as _UUID
+            await log_action(db, _UUID(org_id), user.id, "user.login", {"email": req.email})
+        except Exception as audit_err:
+            logger.warning(f"Login audit skipped: {audit_err}")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
     access = create_access_token(str(user.id), org_id)
     refresh = create_refresh_token(str(user.id))
     return TokenResponse(

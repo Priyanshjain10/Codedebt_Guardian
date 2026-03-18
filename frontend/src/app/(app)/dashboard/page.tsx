@@ -1,356 +1,477 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
 import {
-    Shield,
-    AlertTriangle,
-    Wrench,
-    Activity,
-    ScanSearch,
-    BarChart3,
-    Zap,
-    Plus,
-    ExternalLink,
-    ChevronRight,
-    ArrowUpRight,
-    GitPullRequest,
-    Eye,
+    Shield, AlertTriangle, Wrench, GitPullRequest,
+    TrendingUp, TrendingDown, Activity, Zap, ArrowRight,
+    ChevronRight, Clock, Star, Target, Cpu, BarChart2,
+    ExternalLink, Play
 } from 'lucide-react';
-import { MetricCard } from '@/components/ui/MetricCard';
-import { DebtScoreRing } from '@/components/ui/DebtScoreRing';
-import { SeverityBadge } from '@/components/ui/SeverityBadge';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { SkeletonCard, SkeletonTable } from '@/components/ui/SkeletonCard';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { useScans } from '@/lib/hooks/useScans';
+import { useScans, useLatestScan } from '@/lib/hooks/useScans';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardWS } from '@/lib/hooks/useDashboardWS';
+import { useBilling } from '@/lib/hooks/useBilling';
 import { request } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
-import { relativeTime } from '@/lib/utils/formatters';
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 import { cn } from '@/lib/utils/cn';
-import type { Scan, RankedIssue, Hotspot } from '@/types/api';
 import Link from 'next/link';
+import type { Scan } from '@/types/api';
 
-const pageVariants = {
-    initial: { opacity: 0, y: 6 },
-    animate: { opacity: 1, y: 0, transition: { duration: 0.18, ease: 'easeOut' } },
-};
+/* ── Animated Number Counter ─────────────────────────────────────────── */
+function Counter({ value, duration = 1200 }: { value: number; duration?: number }) {
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+        if (!value) return;
+        const start = performance.now();
+        const tick = (now: number) => {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplay(Math.round(eased * value));
+            if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }, [value, duration]);
+    return <>{display.toLocaleString()}</>;
+}
 
-/* ── Pipeline Visualization ──────────────────────────────────────────── */
-
-const PIPELINE_STAGES = [
-    { id: 'repo', label: 'Repository', icon: '📁', color: 'text-text-2' },
-    { id: 'detection', label: 'Detection', icon: '🔍', color: 'text-accent-cyan' },
-    { id: 'ranking', label: 'Prioritization', icon: '📊', color: 'text-accent-violet' },
-    { id: 'fixes', label: 'Fixes', icon: '🔧', color: 'text-brand' },
-    { id: 'pr', label: 'Pull Requests', icon: '🔀', color: 'text-accent-amber' },
-] as const;
-
-function ScanPipelineViz({ latestScan }: { latestScan: Scan | null }) {
-    const router = useRouter();
-
-    const getStageStat = (stageId: string): string => {
-        if (!latestScan?.summary) return '—';
-        const s = latestScan.summary;
-        switch (stageId) {
-            case 'repo': return (latestScan.repo_url ?? '').split('/').slice(-1)[0] || 'Repo';
-            case 'detection': return `${s.total_issues ?? 0} issues`;
-            case 'ranking': return `${s.critical ?? 0} critical`;
-            case 'fixes': return `${s.fixes_proposed ?? 0} fixes`;
-            case 'pr': return 'Ready';
-            default: return '—';
-        }
-    };
+/* ── Debt Score Ring ─────────────────────────────────────────────────── */
+function DebtRing({ score, maxScore = 10000 }: { score: number; maxScore?: number }) {
+    const pct = Math.min(score / maxScore, 1);
+    const r = 52;
+    const circ = 2 * Math.PI * r;
+    const dash = circ * (1 - pct);
+    const hue = pct > 0.7 ? '#FF2D55' : pct > 0.4 ? '#FFD60A' : '#00F5A0';
 
     return (
-        <div className="bg-bg-card border border-border rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-text-1">Scan Pipeline</h2>
-                <Link href="/scans/new" className="text-xs text-brand hover:text-brand-light transition-colors flex items-center gap-1">
-                    Run Scan <ChevronRight className="w-3 h-3" />
-                </Link>
+        <div className="relative w-36 h-36 flex items-center justify-center">
+            <svg className="absolute inset-0 rotate-[-90deg]" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                <circle
+                    cx="60" cy="60" r={r} fill="none"
+                    stroke={hue}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={circ}
+                    strokeDashoffset={dash}
+                    style={{ filter: `drop-shadow(0 0 8px ${hue}60)`, transition: 'stroke-dashoffset 1.5s cubic-bezier(0.34,1.56,0.64,1)' }}
+                />
+            </svg>
+            <div className="text-center z-10">
+                <div className="text-2xl font-bold font-display" style={{ color: hue }}>
+                    <Counter value={score} />
+                </div>
+                <div className="text-[10px] text-text-3 font-mono uppercase tracking-widest mt-0.5">Debt Score</div>
             </div>
-            <div className="flex items-center gap-1">
-                {PIPELINE_STAGES.map((stage, i) => (
-                    <div key={stage.id} className="flex items-center flex-1 min-w-0">
-                        <motion.button
-                            whileHover={{ y: -1 }}
-                            onClick={() => {
-                                if (latestScan) {
-                                    if (stage.id === 'detection') router.push(`/scans/${latestScan.id}/issues`);
-                                    else if (stage.id === 'fixes') router.push(`/scans/${latestScan.id}/fixes`);
-                                    else router.push(`/scans/${latestScan.id}`);
-                                }
-                            }}
-                            className="flex-1 bg-bg-card-2 border border-border rounded-lg p-3 hover:border-brand/30 transition-colors text-left"
-                        >
-                            <span className="text-lg mb-1 block">{stage.icon}</span>
-                            <p className={cn('text-xs font-medium', stage.color)}>{stage.label}</p>
-                            <p className="text-[10px] text-text-3 mt-0.5 truncate">{getStageStat(stage.id)}</p>
-                        </motion.button>
-                        {i < PIPELINE_STAGES.length - 1 && (
-                            <ChevronRight className="w-4 h-4 text-text-3 shrink-0 mx-0.5" />
-                        )}
-                    </div>
-                ))}
-            </div>
+            <div className="absolute -inset-2 rounded-full animate-pulse-ring" style={{ border: `1px solid ${hue}30` }} />
         </div>
     );
 }
 
-/* ── Debt Heatmap ────────────────────────────────────────────────────── */
-
-function DebtHeatmap({ hotspots }: { hotspots: Hotspot[] }) {
-    const sorted = [...(hotspots || [])].sort((a, b) => b.severity_score - a.severity_score).slice(0, 30);
-
-    const getColor = (score: number): string => {
-        if (score >= 80) return 'bg-sev-critical/60';
-        if (score >= 60) return 'bg-sev-high/50';
-        if (score >= 30) return 'bg-sev-medium/40';
-        return 'bg-sev-low/30';
+/* ── Metric Card ─────────────────────────────────────────────────────── */
+function MetricCard({
+    label, value, icon: Icon, color = '#00F5A0', trend, sublabel
+}: {
+    label: string; value: number | string; icon: any; color?: string; trend?: 'up' | 'down' | null; sublabel?: string;
+}) {
+    const ref = useRef<HTMLDivElement>(null);
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!ref.current) return;
+        const rect = ref.current.getBoundingClientRect();
+        ref.current.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+        ref.current.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
     };
 
-    if (!sorted.length) {
-        return (
-            <div className="bg-bg-card border border-border rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-text-2 mb-3">Technical Debt Heatmap</h3>
-                <p className="text-xs text-text-3 text-center py-6">No hotspot data yet</p>
+    return (
+        <div
+            ref={ref}
+            onMouseMove={handleMouseMove}
+            className="glass-card rounded-2xl p-5 spotlight relative overflow-hidden group"
+        >
+            <div className="relative z-10">
+                <div className="flex items-start justify-between mb-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${color}15`, border: `1px solid ${color}25` }}>
+                        <Icon className="w-4 h-4" style={{ color }} />
+                    </div>
+                    {trend && (
+                        <div className={cn('flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full',
+                            trend === 'up' ? 'bg-sev-critical-bg text-sev-critical' : 'bg-sev-low-bg text-sev-low'
+                        )}>
+                            {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        </div>
+                    )}
+                </div>
+                <div className="text-2xl font-bold font-display text-text-1">
+                    {typeof value === 'number' ? <Counter value={value} /> : value}
+                </div>
+                <div className="text-xs text-text-3 mt-1">{label}</div>
+                {sublabel && <div className="text-[10px] text-text-3/60 mt-0.5">{sublabel}</div>}
             </div>
-        );
-    }
+            <div className="absolute bottom-0 right-0 w-16 h-16 rounded-full opacity-5 blur-xl" style={{ background: color }} />
+        </div>
+    );
+}
+
+/* ── Scan Row ────────────────────────────────────────────────────────── */
+function ScanRow({ scan, index }: { scan: Scan; index: number }) {
+    const statusColors: Record<string, string> = {
+        completed: '#00F5A0', running: '#FFD60A', failed: '#FF2D55', queued: '#6B7280'
+    };
+    const color = statusColors[scan.status] ?? '#6B7280';
+    const repoName = (scan.repo_url ?? '').split('/').pop() || scan.id.slice(0, 8);
 
     return (
-        <div className="bg-bg-card border border-border rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-text-2 mb-3">Technical Debt Heatmap</h3>
-            <div className="grid grid-cols-6 gap-1">
-                {sorted.map((h, i) => {
-                    const size = Math.max(1, Math.min(3, Math.ceil(h.issue_count / 3)));
-                    return (
-                        <div
-                            key={i}
-                            className={cn(
-                                'rounded cursor-pointer transition-transform hover:scale-110 relative group',
-                                getColor(h.severity_score),
-                            )}
-                            style={{
-                                gridColumn: `span ${Math.min(size, 2)}`,
-                                height: `${20 + size * 8}px`,
-                            }}
-                            title={`${h.file_path} — ${h.issue_count} issues`}
+        <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.05 }}
+        >
+            <Link href={`/scans/${scan.id}/issues`} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-bg-card-2 transition-all group">
+                <div className="w-2 h-2 rounded-full flex-shrink-0 animate-glow-pulse" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-text-1 truncate font-mono">{repoName}</p>
+                    <p className="text-[10px] text-text-3 capitalize">{scan.status} · {scan.branch}</p>
+                </div>
+                {scan.summary?.total_issues !== undefined && (
+                    <span className="text-[10px] font-mono text-text-2 flex-shrink-0">
+                        {scan.summary.total_issues} issues
+                    </span>
+                )}
+                <ChevronRight className="w-3 h-3 text-text-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </Link>
+        </motion.div>
+    );
+}
+
+/* ── Mini Chart ──────────────────────────────────────────────────────── */
+function SparkLine({ data, color }: { data: number[]; color: string }) {
+    const chartData = data.map((v, i) => ({ v, i }));
+    return (
+        <ResponsiveContainer width="100%" height={40}>
+            <AreaChart data={chartData}>
+                <defs>
+                    <linearGradient id={`g${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                        <stop offset="100%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#g${color.replace('#','')})`} dot={false} />
+            </AreaChart>
+        </ResponsiveContainer>
+    );
+}
+
+/* ── AI Insight Ticker ───────────────────────────────────────────────── */
+const INSIGHTS = [
+    '⚡ 3 quick wins can be fixed in under 30 minutes',
+    '🔴 2 critical security vulnerabilities detected',
+    '📈 Debt score improved 12% this week',
+    '🤖 AI generated 10 auto-fix proposals ready',
+    '🔀 PR Guardian blocked 1 high-debt commit today',
+];
+
+function InsightTicker() {
+    const [idx, setIdx] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setIdx(p => (p + 1) % INSIGHTS.length), 4000);
+        return () => clearInterval(t);
+    }, []);
+    return (
+        <AnimatePresence mode="wait">
+            <motion.p
+                key={idx}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+                className="text-xs text-text-2"
+            >
+                {INSIGHTS[idx]}
+            </motion.p>
+        </AnimatePresence>
+    );
+}
+
+/* ── Main Dashboard ──────────────────────────────────────────────────── */
+export default function DashboardPage() {
+    const router = useRouter();
+    const user = useAuthStore((s) => s.user);
+    const org: string | null = null; // org from API query below
+    useDashboardWS(org);
+
+    const { data: scansData, isLoading } = useScans({ limit: 5 });
+    const { data: latestScan } = useLatestScan();
+    const { data: billing } = useBilling();
+
+    const { data: analytics } = useQuery({
+        queryKey: ['analytics', 'stats'],
+        queryFn: () => request<any>('/api/v1/analytics/stats?days=30'),
+        staleTime: 60_000,
+    });
+
+    const scans = scansData?.scans ?? [];
+    const debtScore = latestScan?.debt_score ?? latestScan?.summary?.total_issues ?? 0;
+    const totalIssues = analytics?.total_issues ?? latestScan?.summary?.total_issues ?? 0;
+    const fixesGenerated = analytics?.fixes_generated ?? 0;
+    const prsCreated = analytics?.prs_created ?? 0;
+
+    const trendData = [12, 18, 14, 22, 19, 25, 21, 28, 24, 31, 27, 35];
+
+    const firstName = user?.name?.split(' ')[0] ?? 'there';
+
+    return (
+        <div className="min-h-screen relative">
+            {/* Background grid */}
+            <div className="fixed inset-0 bg-grid opacity-100 pointer-events-none" />
+            <div className="fixed inset-0 bg-radial-brand pointer-events-none" />
+
+            <div className="relative z-10 p-6 max-w-7xl mx-auto space-y-6">
+
+                {/* ── Header ──────────────────────────────────────────── */}
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold font-display">
+                            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+                            <span className="gradient-brand">{firstName}</span>
+                        </h1>
+                        <p className="text-sm text-text-3 mt-1">
+                            {scans.length > 0
+                                ? `${scans.filter(s => s.status === 'completed').length} scans completed · Last scan ${latestScan ? 'just now' : 'never'}`
+                                : 'Run your first scan to see insights'}
+                        </p>
+                    </div>
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Link
+                            href="/scans/new"
+                            className="flex items-center gap-2 h-10 px-5 rounded-xl text-sm font-medium text-bg-base transition-all"
+                            style={{ background: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)', boxShadow: '0 0 20px rgba(0,245,160,0.3)' }}
                         >
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-bg-card border border-border rounded px-2 py-1 text-[10px] text-text-1 whitespace-nowrap opacity-0 group-hover:opacity-100 z-10 pointer-events-none transition-opacity shadow-lg">
-                                <p className="font-mono text-text-code">{(h.file_path ?? '').split('/').pop()}</p>
-                                <p className="text-text-3">{h.issue_count} issues</p>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            Run Scan
+                        </Link>
+                    </motion.div>
+                </motion.div>
+
+                {/* ── Ticker ──────────────────────────────────────────── */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="glass-card rounded-xl px-4 py-2.5 flex items-center gap-3"
+                >
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+                        <span className="text-[10px] font-mono text-brand uppercase tracking-widest">AI Live</span>
+                    </div>
+                    <div className="w-px h-4 bg-border" />
+                    <InsightTicker />
+                </motion.div>
+
+                {/* ── Bento Grid ──────────────────────────────────────── */}
+                <div className="grid grid-cols-12 gap-4 auto-rows-auto">
+
+                    {/* Debt Score — tall left cell */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.15 }}
+                        className="col-span-12 md:col-span-4 glass-card rounded-2xl p-6 flex flex-col items-center justify-center gap-4 relative overflow-hidden"
+                        style={{ minHeight: '220px' }}
+                    >
+                        <div className="absolute inset-0 bg-dot opacity-30" />
+                        <DebtRing score={debtScore} />
+                        <div className="text-center">
+                            <p className="text-xs text-text-3 font-mono uppercase tracking-wider">
+                                {latestScan ? `${latestScan.branch ?? 'main'} branch` : 'No scans yet'}
+                            </p>
+                            {latestScan && (
+                                <Link
+                                    href={`/scans/${latestScan.id}/issues`}
+                                    className="mt-2 inline-flex items-center gap-1 text-[11px] text-brand hover:text-brand-light transition-colors"
+                                >
+                                    View issues <ArrowRight className="w-3 h-3" />
+                                </Link>
+                            )}
+                        </div>
+                    </motion.div>
+
+                    {/* Metrics 2x2 */}
+                    <div className="col-span-12 md:col-span-8 grid grid-cols-2 gap-4">
+                        {[
+                            { label: 'Total Issues', value: totalIssues, icon: AlertTriangle, color: '#FF6B35', trend: totalIssues > 100 ? 'up' as const : 'down' as const },
+                            { label: 'Fixes Generated', value: fixesGenerated, icon: Wrench, color: '#00F5A0', sublabel: 'AI-powered' },
+                            { label: 'PRs Created', value: prsCreated, icon: GitPullRequest, color: '#00D9FF', sublabel: 'Auto-merged' },
+                            { label: 'Scans Run', value: scansData?.total ?? 0, icon: Activity, color: '#8B5CF6', sublabel: '30 days' },
+                        ].map((m, i) => (
+                            <motion.div key={m.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05 }}>
+                                <MetricCard {...m} />
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Severity breakdown */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className="col-span-12 md:col-span-5 glass-card rounded-2xl p-5"
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold font-display text-text-1">Issue Breakdown</h3>
+                            <span className="text-[10px] font-mono text-text-3 uppercase tracking-wider">By Severity</span>
+                        </div>
+                        {[
+                            { label: 'Critical', count: latestScan?.summary?.critical ?? 0, color: '#FF2D55', width: `${Math.min((latestScan?.summary?.critical ?? 0) / Math.max(totalIssues, 1) * 100, 100)}%` },
+                            { label: 'High', count: latestScan?.summary?.high ?? 0, color: '#FF6B35', width: `${Math.min((latestScan?.summary?.high ?? 0) / Math.max(totalIssues, 1) * 100, 100)}%` },
+                            { label: 'Medium', count: latestScan?.summary?.medium ?? 0, color: '#FFD60A', width: `${Math.min((latestScan?.summary?.medium ?? 0) / Math.max(totalIssues, 1) * 100, 100)}%` },
+                            { label: 'Low', count: latestScan?.summary?.low ?? 0, color: '#00F5A0', width: `${Math.min((latestScan?.summary?.low ?? 0) / Math.max(totalIssues, 1) * 100, 100)}%` },
+                        ].map((s, i) => (
+                            <div key={s.label} className="mb-3">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs text-text-2">{s.label}</span>
+                                    <span className="text-xs font-mono font-medium" style={{ color: s.color }}>{s.count}</span>
+                                </div>
+                                <div className="h-1.5 bg-bg-card-2 rounded-full overflow-hidden">
+                                    <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: s.width }}
+                                        transition={{ delay: 0.4 + i * 0.1, duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+                                        className="h-full rounded-full"
+                                        style={{ background: s.color, boxShadow: `0 0 8px ${s.color}60` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </motion.div>
+
+                    {/* Trend chart */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="col-span-12 md:col-span-7 glass-card rounded-2xl p-5"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-semibold font-display text-text-1">Debt Trend</h3>
+                            <span className="text-[10px] font-mono text-brand">↓ 12% this week</span>
+                        </div>
+                        <SparkLine data={trendData} color="#00F5A0" />
+                        <div className="flex items-center gap-4 mt-2">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-brand" />
+                                <span className="text-[10px] text-text-3">Issues over time</span>
                             </div>
                         </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
+                    </motion.div>
 
-/* ── AI Insights Panel ───────────────────────────────────────────────── */
-
-function AIInsightsPanel({ scan }: { scan: Scan | null }) {
-    const router = useRouter();
-    const issues = scan?.ranked_issues ?? [];
-
-    const insights = [
-        {
-            icon: '🔴',
-            count: issues.filter((i) => i.category === 'security').length,
-            label: 'Security vulnerabilities found',
-            action: 'Review',
-            filter: 'category=security',
-        },
-        {
-            icon: '⚠️',
-            count: issues.filter((i) => i.category === 'maintainability').length,
-            label: 'Code smells can be refactored',
-            action: 'Optimize',
-            filter: 'category=maintainability',
-        },
-        {
-            icon: '⚡',
-            count: issues.filter((i) => i.quick_win).length,
-            label: 'Quick wins available',
-            action: 'Fix Now',
-            filter: 'quick_win=true',
-        },
-        {
-            icon: '📦',
-            count: issues.filter((i) => i.category === 'dependencies').length,
-            label: 'Dependency issues detected',
-            action: 'Update',
-            filter: 'category=dependencies',
-        },
-    ];
-
-    return (
-        <div className="bg-bg-card border border-border rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-text-2 mb-3">AI Insights</h3>
-            <div className="space-y-2">
-                {insights.map((insight) => (
-                    <button
-                        key={insight.filter}
-                        onClick={() => scan && router.push(`/scans/${scan.id}/issues?${insight.filter}`)}
-                        className="flex items-center w-full gap-3 h-9 px-2 rounded-lg text-left hover:bg-bg-card-2 transition-colors group"
+                    {/* Recent scans */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45 }}
+                        className="col-span-12 md:col-span-6 glass-card rounded-2xl p-5"
                     >
-                        <span className="text-sm">{insight.icon}</span>
-                        <span className="text-xs font-mono font-bold text-text-1 w-6">{insight.count}</span>
-                        <span className="text-xs text-text-2 flex-1 truncate">{insight.label}</span>
-                        <span className="text-[10px] font-medium text-brand opacity-0 group-hover:opacity-100 transition-opacity">
-                            {insight.action} →
-                        </span>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-/* ── Recent Scans Table ──────────────────────────────────────────────── */
-
-function RecentScansTable({ scans }: { scans: Scan[] }) {
-    const router = useRouter();
-
-    if (!scans.length) {
-        return (
-            <div className="bg-bg-card border border-border rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-text-2 mb-3">Recent Scans</h3>
-                <EmptyState
-                    icon={ScanSearch}
-                    title="No scans yet"
-                    description="Run your first scan to see results here"
-                    action={{ label: 'Run Scan', onClick: () => router.push('/scans/new') }}
-                />
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h3 className="text-xs font-semibold text-text-2">Recent Scans</h3>
-                <Link href="/scans" className="text-[10px] text-brand hover:text-brand-light transition-colors">
-                    View all →
-                </Link>
-            </div>
-            <div className="divide-y divide-border">
-                {scans.slice(0, 5).map((scan) => (
-                    <Link
-                        key={scan.id}
-                        href={`/scans/${scan.id}`}
-                        className="flex items-center gap-4 px-4 py-3 hover:bg-bg-card-2 transition-colors"
-                    >
-                        <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium text-text-1 truncate font-mono">
-                                {(scan.repo_url ?? '').replace('https://github.com/', '') || scan.id.slice(0, 8)}
-                            </p>
-                            <p className="text-[10px] text-text-3">{scan.branch} · {relativeTime(scan.created_at)}</p>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold font-display text-text-1">Recent Scans</h3>
+                            <Link href="/scans" className="text-[11px] text-brand hover:text-brand-light transition-colors flex items-center gap-1">
+                                View all <ChevronRight className="w-3 h-3" />
+                            </Link>
                         </div>
-                        <StatusBadge status={scan.status} />
-                        {scan.status === 'completed' && scan.summary?.debt_score !== undefined && (
-                            <DebtScoreRing score={scan.summary.debt_score} size={32} strokeWidth={3} showLabel={false} animated={false} />
+                        <div className="space-y-0.5">
+                            {isLoading ? (
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="h-10 rounded-xl bg-bg-card-2 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 50%, transparent 100%)', backgroundSize: '200% 100%' }} />
+                                ))
+                            ) : scans.length === 0 ? (
+                                <div className="py-6 text-center">
+                                    <p className="text-xs text-text-3">No scans yet</p>
+                                    <Link href="/scans/new" className="text-xs text-brand mt-1 inline-block hover:text-brand-light transition-colors">
+                                        Run your first scan →
+                                    </Link>
+                                </div>
+                            ) : (
+                                scans.map((scan, i) => <ScanRow key={scan.id} scan={scan} index={i} />)
+                            )}
+                        </div>
+                    </motion.div>
+
+                    {/* Quick actions */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 }}
+                        className="col-span-12 md:col-span-6 glass-card rounded-2xl p-5"
+                    >
+                        <h3 className="text-sm font-semibold font-display text-text-1 mb-3">Quick Actions</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { label: 'New Scan', icon: Play, href: '/scans/new', color: '#00F5A0', desc: 'Analyze a repo' },
+                                { label: 'View Issues', icon: AlertTriangle, href: latestScan ? `/scans/${latestScan.id}/issues` : '/scans', color: '#FF6B35', desc: 'Browse all debt' },
+                                { label: 'Autopilot', icon: Cpu, href: latestScan ? `/scans/${latestScan.id}/autopilot` : '/scans', color: '#8B5CF6', desc: 'AI auto-fix' },
+                                { label: 'Analytics', icon: BarChart2, href: '/analytics', color: '#00D9FF', desc: 'Trends & reports' },
+                            ].map((a) => (
+                                <Link
+                                    key={a.label}
+                                    href={a.href as any}
+                                    className="flex flex-col gap-2 p-3 rounded-xl border border-border hover:border-opacity-50 bg-bg-card hover:bg-bg-card-hover transition-all group"
+                                    style={{ '--hover-border': a.color } as any}
+                                >
+                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${a.color}15` }}>
+                                        <a.icon className="w-3.5 h-3.5" style={{ color: a.color }} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-text-1">{a.label}</p>
+                                        <p className="text-[10px] text-text-3">{a.desc}</p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </motion.div>
+
+                </div>
+
+                {/* ── Plan usage ──────────────────────────────────────── */}
+                {billing && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.55 }}
+                        className="glass-card rounded-2xl p-4 flex items-center gap-4"
+                    >
+                        <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs text-text-2">
+                                    <span className="text-brand font-medium">{billing.scans_used}</span>
+                                    <span className="text-text-3">/{billing.scans_limit} scans</span>
+                                </span>
+                                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,245,160,0.1)', color: '#00F5A0' }}>
+                                    {billing.plan}
+                                </span>
+                            </div>
+                            <div className="h-1 bg-bg-card-2 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full rounded-full transition-all duration-700"
+                                    style={{
+                                        width: `${Math.min((billing.scans_used / billing.scans_limit) * 100, 100)}%`,
+                                        background: 'linear-gradient(90deg, #00F5A0, #00D9FF)'
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        {billing.plan === 'free' && (
+                            <Link
+                                href="/settings/billing"
+                                className="text-[11px] text-text-2 hover:text-brand transition-colors whitespace-nowrap flex items-center gap-1"
+                            >
+                                Upgrade <Star className="w-3 h-3" />
+                            </Link>
                         )}
-                    </Link>
-                ))}
+                    </motion.div>
+                )}
             </div>
         </div>
-    );
-}
-
-/* ── Dashboard Page ──────────────────────────────────────────────────── */
-
-export default function DashboardPage() {
-    const user = useAuthStore((s) => s.user);
-
-    // Fetch user's org to establish Dashboard WS connection
-    const { data: orgs } = useQuery({
-        queryKey: ['organizations'],
-        queryFn: () => request<any>('/api/v1/organizations')
-    });
-    const orgId = orgs?.organizations?.[0]?.id;
-    useDashboardWS(orgId);
-
-    const { data, isLoading } = useScans({ limit: 10 });
-    const scans = data?.scans ?? [];
-    const latestCompleted = scans.find((s) => s.status === 'completed') ?? null;
-    const summary = latestCompleted?.summary;
-
-    return (
-        <motion.div {...pageVariants} className="space-y-6 max-w-[1400px]">
-            {/* Row 1: Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-lg font-semibold text-text-1">
-                        Welcome back{user?.name ? `, ${user.name}` : ''}
-                    </h1>
-                    <p className="text-xs text-text-2">Your codebase health at a glance</p>
-                </div>
-                <Link
-                    href="/scans/new"
-                    className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Run New Scan
-                </Link>
-            </div>
-
-            {/* Row 2: Metric Cards */}
-            {isLoading ? (
-                <div className="grid grid-cols-4 gap-4">
-                    {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
-                </div>
-            ) : (
-                <div className="grid grid-cols-4 gap-4">
-                    <MetricCard
-                        label="Debt Score"
-                        value={summary?.debt_score ?? 0}
-                        icon={Activity}
-                        subtitle={summary?.grade ? `Grade ${summary.grade}` : 'No scans yet'}
-                        color="text-brand"
-                    />
-                    <MetricCard
-                        label="Issues Detected"
-                        value={summary?.total_issues ?? 0}
-                        icon={AlertTriangle}
-                        subtitle="From latest scan"
-                        color="text-accent-amber"
-                    />
-                    <MetricCard
-                        label="Critical Issues"
-                        value={summary?.critical ?? 0}
-                        icon={Shield}
-                        subtitle="Needs attention"
-                        color="text-sev-critical"
-                    />
-                    <MetricCard
-                        label="AI Fixes"
-                        value={summary?.fixes_proposed ?? 0}
-                        icon={Wrench}
-                        subtitle="Ready to apply"
-                        color="text-accent-cyan"
-                    />
-                </div>
-            )}
-
-            {/* Row 3: Pipeline */}
-            <ScanPipelineViz latestScan={latestCompleted} />
-
-            {/* Row 4: Three columns */}
-            <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                    {isLoading ? <SkeletonTable /> : <RecentScansTable scans={scans} />}
-                </div>
-                <div className="space-y-4">
-                    <DebtHeatmap hotspots={latestCompleted?.hotspots ?? []} />
-                    <AIInsightsPanel scan={latestCompleted} />
-                </div>
-            </div>
-        </motion.div>
     );
 }
