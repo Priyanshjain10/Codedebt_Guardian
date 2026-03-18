@@ -358,3 +358,25 @@ async def ai_health():
         return {"providers": ai_gateway.health()}
     except Exception as e:
         return {"providers": {}, "error": str(e)}
+
+
+@app.get("/health/metrics")
+async def health_metrics():
+    """System resource metrics for monitoring."""
+    try:
+        import psutil
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory": {
+                "total_mb": round(psutil.virtual_memory().total / 1024 / 1024),
+                "used_mb": round(psutil.virtual_memory().used / 1024 / 1024),
+                "percent": psutil.virtual_memory().percent,
+            },
+            "disk": {
+                "total_gb": round(psutil.disk_usage("/").total / 1024 / 1024 / 1024, 1),
+                "used_gb": round(psutil.disk_usage("/").used / 1024 / 1024 / 1024, 1),
+                "percent": psutil.disk_usage("/").percent,
+            },
+        }
+    except ImportError:
+        return {"error": "psutil not installed"}

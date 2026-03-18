@@ -4,6 +4,22 @@ Full multi-tenant SaaS schema: orgs → teams → projects → scans → issues.
 """
 
 import uuid
+
+class ScanStatus:
+    PENDING = "pending"
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class ScanPhase:
+    INIT = "init"
+    DETECTION = "detection"
+    RANKING = "ranking"
+    FIX_GENERATION = "fix_generation"
+    AUTOPILOT = "autopilot"
+
+
 from datetime import datetime, timezone
 
 from sqlalchemy import (

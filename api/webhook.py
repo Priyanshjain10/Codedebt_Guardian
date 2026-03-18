@@ -81,15 +81,15 @@ async def github_webhook(request: Request):
     body = await request.body()
 
     # ── Signature verification ──────────────────────────────────────
-    if GITHUB_WEBHOOK_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256", "")
-        expected = (
-            "sha256="
-            + hmac.new(GITHUB_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-        )
-
-        if not hmac.compare_digest(signature, expected):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    if not GITHUB_WEBHOOK_SECRET:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured on server")
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    expected = (
+        "sha256="
+        + hmac.new(GITHUB_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    )
+    if not hmac.compare_digest(signature, expected):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # ── Parse event ─────────────────────────────────────────────────
     event_type = request.headers.get("X-GitHub-Event", "")

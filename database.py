@@ -21,6 +21,8 @@ async_engine = create_async_engine(
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,
     echo=settings.DEBUG,
+    pool_pre_ping=True,
+    pool_recycle=3600,
     connect_args={"statement_cache_size": 0},
 )
 
@@ -36,6 +38,8 @@ sync_engine = create_engine(
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,
     echo=settings.DEBUG,
+    pool_pre_ping=True,
+    pool_recycle=3600,
 )
 
 SyncSessionLocal = sessionmaker(bind=sync_engine)
