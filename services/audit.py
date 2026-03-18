@@ -1,3 +1,4 @@
+import uuid
 """
 CodeDebt Guardian — Audit Logging Service
 Writes to UsageLog for SOC 2 compliance and enterprise audit trails.
@@ -32,7 +33,8 @@ async def log_action(
             metadata_=metadata or {},
         )
         db.add(entry)
-        await db.flush()
+        async with db.begin_nested():
+            await db.flush()
     except Exception as e:
         logger.warning(f"Audit log write failed (non-fatal): {e}")
 
