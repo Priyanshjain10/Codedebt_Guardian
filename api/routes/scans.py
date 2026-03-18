@@ -271,8 +271,10 @@ async def get_latest_scan(
     """Get the most recent completed scan for the authenticated user.
     Used by the sidebar nav shortcut links.
     """
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Scan)
+        .options(selectinload(Scan.project))
         .where(Scan.triggered_by == user.id, Scan.status == "completed")
         .order_by(Scan.created_at.desc())
         .limit(1)

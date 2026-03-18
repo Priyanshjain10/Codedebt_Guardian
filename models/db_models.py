@@ -1,9 +1,23 @@
-"""
-CodeDebt Guardian — SQLAlchemy ORM Models
-Full multi-tenant SaaS schema: orgs → teams → projects → scans → issues.
-"""
+from datetime import datetime, timezone
 
-import uuid
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
+
+from database import Base
+
 
 class ScanStatus:
     PENDING = "pending"

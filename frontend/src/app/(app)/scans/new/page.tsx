@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, ArrowLeft, GitBranch, Loader2, CheckCircle2, AlertCircle, FolderGit2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, GitBranch, Loader2, CheckCircle2, AlertCircle, FolderGit2, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import * as scansApi from '@/lib/api/scans';
 import { useScanWebSocket } from '@/lib/hooks/useScanWebSocket';

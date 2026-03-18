@@ -100,8 +100,6 @@ async def github_webhook(request: Request):
 
     # ── Dispatch ────────────────────────────────────────────────────
     if event_type == "pull_request" and data.get("action") in ("opened", "synchronize"):
-        from workers.pr_tasks import process_pr_event
-
         pr = data.get("pull_request", {})
         repo_full = data.get("repository", {}).get("full_name")
         pr_number = pr.get("number")
@@ -112,8 +110,9 @@ async def github_webhook(request: Request):
 
         if installation_id:
             try:
-                token = _get_installation_token(installation_id)
-                _background_pr_task(repo_full, pr_number, installation_id)
+                from workers.pr_tasks import process_pr_event_bg
+                import asyncio
+                asyncio.create_task(process_pr_event_bg(repo_full, pr_number, installation_id))
                 logger.info(f"Enqueued process_pr_event for {repo_full}#{pr_number}")
             except Exception as e:
                 logger.error(f"Failed to enqueue PR event: {e}")
