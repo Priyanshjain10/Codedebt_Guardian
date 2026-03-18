@@ -19,40 +19,7 @@ from pgvector.sqlalchemy import Vector
 from database import Base
 
 
-class ScanStatus:
-    PENDING = "pending"
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
-class ScanPhase:
-    INIT = "init"
-    DETECTION = "detection"
-    RANKING = "ranking"
-    FIX_GENERATION = "fix_generation"
-    AUTOPILOT = "autopilot"
-
-
-from datetime import datetime, timezone
-
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
-from pgvector.sqlalchemy import Vector
-
-from database import Base
 
 
 def _utcnow():
@@ -443,3 +410,4 @@ class GitHubInstallation(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
     organization = relationship("Organization", back_populates="github_installations")
+
