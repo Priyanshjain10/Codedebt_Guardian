@@ -17,7 +17,7 @@ from jose import JWTError, jwt
 from config import settings
 from database import AsyncSessionLocal
 from sqlalchemy import select
-from models.db_models import Scan, TeamMember, Team, Project
+from models.db_models import Scan, TeamMember, Project
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,6 @@ async def scan_websocket(
             await db.execute(
                 select(TeamMember)
                 .join(Project, Project.team_id == TeamMember.team_id)
-                .join(Team, Team.id == TeamMember.team_id)
                 .where(Project.id == scan.project_id, TeamMember.user_id == user_uuid)
                 .limit(1)
             )
@@ -207,7 +206,7 @@ async def dashboard_websocket(
     try:
         org_uuid = uuid.UUID(org_id)
         user_uuid = uuid.UUID(user_id)
-    except Exception:
+    except ValueError:
         await websocket.accept()
         await websocket.close(code=4004, reason="Invalid org")
         return
