@@ -308,7 +308,7 @@ async def _sync_repos_for_installation(
     """Fetch repos from GitHub and create Project records for new ones."""
     try:
         token, expires = _get_installation_token(installation.installation_id)
-        installation.access_token = token
+        installation.access_token = None
         installation.token_expires_at = expires
     except Exception as e:
         logger.error(f"Failed to get installation token: {e}")

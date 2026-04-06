@@ -33,7 +33,6 @@ PLAN_LIMITS = {
 
 class CheckoutRequest(BaseModel):
     plan: str  # pro | enterprise
-    org_id: str
 
 
 @router.post("/checkout")
@@ -50,6 +49,21 @@ async def create_checkout_session(
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
+    membership = (
+        await db.execute(
+            select(TeamMember).where(TeamMember.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=400, detail="No organization found")
+
+    from models.db_models import Team
+
+    team = (
+        await db.execute(select(Team).where(Team.id == membership.team_id))
+    ).scalar_one()
+    org_id = str(team.org_id)
+
     price_id = {
         "pro": settings.STRIPE_PRICE_PRO_MONTHLY,
         "enterprise": settings.STRIPE_PRICE_ENTERPRISE_MONTHLY,
@@ -62,9 +76,9 @@ async def create_checkout_session(
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{settings.CORS_ORIGINS[0]}/settings?billing=success",
-            cancel_url=f"{settings.CORS_ORIGINS[0]}/settings?billing=cancel",
-            metadata={"org_id": req.org_id, "user_id": str(user.id)},
+            success_url=f"{settings.FRONTEND_URL}/settings?billing=success",
+            cancel_url=f"{settings.FRONTEND_URL}/settings?billing=cancel",
+            metadata={"org_id": org_id, "user_id": str(user.id)},
         )
         return {"checkout_url": session.url}
     except Exception as e:
@@ -109,7 +123,7 @@ async def create_portal_session(
 
     session = stripe.billing_portal.Session.create(
         customer=sub.stripe_customer_id,
-        return_url=f"{settings.CORS_ORIGINS[0]}/settings",
+        return_url=f"{settings.FRONTEND_URL}/settings",
     )
     return {"portal_url": session.url}
 

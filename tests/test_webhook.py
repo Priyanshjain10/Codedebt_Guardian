@@ -80,6 +80,33 @@ class TestWebhookSignature:
         )
         assert response.status_code == 200
 
+    def test_webhook_enqueues_pr_task(self):
+        """Pull request webhook should enqueue durable Celery PR task."""
+        client, secret = _get_test_client("test_secret_enqueue")
+        payload = {
+            "action": "opened",
+            "pull_request": {"number": 7, "head": {"sha": "abc123"}},
+            "repository": {"full_name": "owner/repo"},
+            "installation": {"id": 99},
+        }
+        body = json.dumps(payload).encode()
+        sig = _make_signature(body, secret)
+
+        with patch("api.webhook._get_installation_token", return_value="tok"), patch(
+            "workers.pr_tasks.process_pr_event.apply_async"
+        ) as mock_apply:
+            response = client.post(
+                "/webhook",
+                content=body,
+                headers={
+                    "X-GitHub-Event": "pull_request",
+                    "X-Hub-Signature-256": sig,
+                    "Content-Type": "application/json",
+                },
+            )
+            assert response.status_code == 200
+            mock_apply.assert_called_once()
+
 
 class TestDiffParser:
     """Test the unified diff line extractor."""

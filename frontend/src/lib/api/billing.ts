@@ -5,9 +5,9 @@ export function getUsage() {
     return request<BillingUsage>('/api/v1/billing/usage');
 }
 
-export function createCheckout(plan: string, orgId: string) {
+export function createCheckout(plan: string, orgId?: string) {
     return request<CheckoutResponse>('/api/v1/billing/checkout', {
         method: 'POST',
-        body: JSON.stringify({ plan, org_id: orgId }),
+        body: JSON.stringify({ plan }),
     });
 }

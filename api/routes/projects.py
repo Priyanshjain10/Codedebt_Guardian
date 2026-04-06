@@ -12,6 +12,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user
+from api.auth import get_project_for_user
 from database import get_db
 from models.db_models import Project, Team, TeamMember, User
 
@@ -104,12 +105,11 @@ async def get_project(
     db: AsyncSession = Depends(get_db),
 ):
     """Get project details."""
-    result = await db.execute(
-        select(Project).where(Project.id == uuid.UUID(project_id))
-    )
-    project = result.scalar_one_or_none()
-    if not project:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Project not found")
+    project, _ = await get_project_for_user(proj_uuid, user.id, db)
 
     # Get scan count
     from models.db_models import Scan
@@ -138,12 +138,11 @@ async def delete_project(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a project and all its scans."""
-    result = await db.execute(
-        select(Project).where(Project.id == uuid.UUID(project_id))
-    )
-    project = result.scalar_one_or_none()
-    if not project:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Project not found")
+    project, _ = await get_project_for_user(proj_uuid, user.id, db, min_role="admin")
 
     await db.delete(project)
     await db.flush()
