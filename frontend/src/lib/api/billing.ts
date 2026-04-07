@@ -8,6 +8,6 @@ export function getUsage() {
 export function createCheckout(plan: string, orgId?: string) {
     return request<CheckoutResponse>('/api/v1/billing/checkout', {
         method: 'POST',
-        body: JSON.stringify({ plan, org_id: orgId ?? null }),
+        body: JSON.stringify({ plan, ...(orgId ? { org_id: orgId } : {}) }),
     });
 }
