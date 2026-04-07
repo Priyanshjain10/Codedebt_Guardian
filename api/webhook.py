@@ -107,13 +107,22 @@ async def github_webhook(request: Request):
             return {"status": "ignored", "reason": "missing repo or pr_number"}
 
         installation_id = data.get("installation", {}).get("id")
+        head_sha = pr.get("head", {}).get("sha", "")
 
         if installation_id:
             try:
-                from workers.pr_tasks import process_pr_event_bg
-                import asyncio
-                asyncio.create_task(process_pr_event_bg(repo_full, pr_number, installation_id))
-                logger.info(f"Enqueued process_pr_event for {repo_full}#{pr_number}")
+                token = _get_installation_token(int(installation_id))
+                from workers.pr_tasks import process_pr_event
+
+                task_id = f"pr:{repo_full}:{pr_number}:{head_sha or 'no-sha'}"
+                process_pr_event.apply_async(
+                    args=[repo_full, int(pr_number), token],
+                    task_id=task_id,
+                    queue="pr",
+                )
+                logger.info(
+                    f"Enqueued process_pr_event for {repo_full}#{pr_number} with task_id={task_id}"
+                )
             except Exception as e:
                 logger.error(f"Failed to enqueue PR event: {e}")
 

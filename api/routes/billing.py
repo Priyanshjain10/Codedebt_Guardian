@@ -4,6 +4,7 @@ Checkout sessions, customer portal, webhook handler, usage tracking.
 """
 
 import logging
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -33,7 +34,7 @@ PLAN_LIMITS = {
 
 class CheckoutRequest(BaseModel):
     plan: str  # pro | enterprise
-    org_id: str
+    org_id: str | None = None
 
 
 @router.post("/checkout")
@@ -50,6 +51,58 @@ async def create_checkout_session(
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
+    membership = (
+        await db.execute(select(TeamMember).where(TeamMember.user_id == user.id))
+    ).scalars().all()
+    if not membership:
+        raise HTTPException(status_code=400, detail="No organization found")
+
+    from models.db_models import Team
+
+    if req.org_id:
+        try:
+            from uuid import UUID as _UUID
+
+            requested_org = _UUID(req.org_id)
+            membership_team_ids = [m.team_id for m in membership]
+            team = (
+                await db.execute(
+                    select(Team)
+                    .where(Team.id.in_(membership_team_ids))
+                    .where(Team.org_id == requested_org)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if not team:
+                raise HTTPException(status_code=403, detail="Access denied for organization")
+            org_id = str(team.org_id)
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid org_id")
+    else:
+        membership_team_ids = [m.team_id for m in membership]
+        teams = (
+            await db.execute(select(Team).where(Team.id.in_(membership_team_ids)))
+        ).scalars().all()
+        org_ids = {str(t.org_id) for t in teams}
+        if len(org_ids) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Multiple organizations found. Please provide org_id.",
+            )
+        if not org_ids:
+            raise HTTPException(status_code=400, detail="No organization found")
+        org_id = next(iter(org_ids))
+
+    allowed_origins = {
+        (urlparse(o).scheme, urlparse(o).netloc.rstrip("/")) for o in settings.CORS_ORIGINS
+    }
+    frontend = urlparse(settings.FRONTEND_URL)
+    frontend_origin = (frontend.scheme, frontend.netloc.rstrip("/"))
+    if frontend_origin not in allowed_origins:
+        raise HTTPException(status_code=500, detail="Invalid FRONTEND_URL configuration")
+
     price_id = {
         "pro": settings.STRIPE_PRICE_PRO_MONTHLY,
         "enterprise": settings.STRIPE_PRICE_ENTERPRISE_MONTHLY,
@@ -62,9 +115,9 @@ async def create_checkout_session(
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{settings.CORS_ORIGINS[0]}/settings?billing=success",
-            cancel_url=f"{settings.CORS_ORIGINS[0]}/settings?billing=cancel",
-            metadata={"org_id": req.org_id, "user_id": str(user.id)},
+            success_url=f"{settings.FRONTEND_URL}/settings?billing=success",
+            cancel_url=f"{settings.FRONTEND_URL}/settings?billing=cancel",
+            metadata={"org_id": org_id, "user_id": str(user.id)},
         )
         return {"checkout_url": session.url}
     except Exception as e:
@@ -109,7 +162,7 @@ async def create_portal_session(
 
     session = stripe.billing_portal.Session.create(
         customer=sub.stripe_customer_id,
-        return_url=f"{settings.CORS_ORIGINS[0]}/settings",
+        return_url=f"{settings.FRONTEND_URL}/settings",
     )
     return {"portal_url": session.url}
 

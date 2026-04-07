@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -410,4 +411,3 @@ class GitHubInstallation(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
     organization = relationship("Organization", back_populates="github_installations")
-

@@ -71,6 +71,7 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "https://codedebt-guardian.vercel.app",
     ]
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # ── Rate Limiting ────────────────────────────────────────────────────
     RATE_LIMIT_DEFAULT: str = "60/minute"

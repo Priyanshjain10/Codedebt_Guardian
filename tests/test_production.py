@@ -55,6 +55,19 @@ async def test_rate_limit_unauthenticated(client: AsyncClient):
     assert 429 in results, f"Expected at least one 429 response, got: {results}"
 
 
+@pytest.mark.asyncio
+async def test_scan_project_id_requires_auth(client: AsyncClient):
+    """project_id-based scan creation should require authentication."""
+    response = await client.post(
+        "/api/v1/scans",
+        json={
+            "repo_url": "https://github.com/test/repo",
+            "project_id": "11111111-1111-1111-1111-111111111111",
+        },
+    )
+    assert response.status_code in (401, 429)
+
+
 def test_structured_json_logging(capsys):
     """Test that the central logger setup correctly emits JSON."""
     setup_structured_logging(level=logging.INFO)

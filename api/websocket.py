@@ -7,6 +7,7 @@ Uses Redis pub/sub as message bus for multi-instance fan-out.
 import asyncio
 import json
 import logging
+import uuid
 from typing import Dict, Set
 
 import redis.asyncio as aioredis
@@ -14,6 +15,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from jose import JWTError, jwt
 
 from config import settings
+from database import AsyncSessionLocal
+from sqlalchemy import select
+from models.db_models import Scan, TeamMember, Project
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +129,32 @@ async def scan_websocket(
     if not user_payload:
         await websocket.close(code=4403, reason="Invalid token")
         return
+    user_id = user_payload.get("sub")
+    if not user_id:
+        await websocket.close(code=4403, reason="Invalid token")
+        return
+    try:
+        scan_uuid = uuid.UUID(scan_id)
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        await websocket.close(code=4404, reason="Scan not found")
+        return
+    async with AsyncSessionLocal() as db:
+        scan = (await db.execute(select(Scan).where(Scan.id == scan_uuid))).scalar_one_or_none()
+        if not scan or not scan.project_id:
+            await websocket.close(code=4404, reason="Scan not found")
+            return
+        member = (
+            await db.execute(
+                select(TeamMember)
+                .join(Project, Project.team_id == TeamMember.team_id)
+                .where(Project.id == scan.project_id, TeamMember.user_id == user_uuid)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if not member and scan.triggered_by != user_uuid:
+            await websocket.close(code=4403, reason="Access denied")
+            return
 
     await websocket.accept()
     channel = f"scan:{scan_id}"
@@ -172,6 +202,27 @@ async def dashboard_websocket(
         await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         return
+    user_id = user_payload.get("sub")
+    try:
+        org_uuid = uuid.UUID(org_id)
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        await websocket.accept()
+        await websocket.close(code=4004, reason="Invalid org")
+        return
+    async with AsyncSessionLocal() as db:
+        member = (
+            await db.execute(
+                select(TeamMember)
+                .join(Team, Team.id == TeamMember.team_id)
+                .where(Team.org_id == org_uuid, TeamMember.user_id == user_uuid)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if not member:
+            await websocket.accept()
+            await websocket.close(code=4003, reason="Access denied")
+            return
 
     await websocket.accept()
     channel = f"dashboard:{org_id}"

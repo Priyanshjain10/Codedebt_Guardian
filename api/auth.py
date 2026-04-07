@@ -23,6 +23,7 @@ from database import get_db
 from models.db_models import (
     APIKeyModel,
     Organization,
+    Project,
     Subscription,
     Team,
     TeamMember,
@@ -30,6 +31,7 @@ from models.db_models import (
 )
 
 security = HTTPBearer(auto_error=False)
+ROLE_ORDER = {"viewer": 0, "member": 1, "admin": 2, "owner": 3}
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────
@@ -215,8 +217,6 @@ async def get_current_user_optional(
 
 def require_role(min_role: str = "member"):
     """Dependency factory: checks the user has at least `min_role` in the org."""
-    role_order = {"viewer": 0, "member": 1, "admin": 2, "owner": 3}
-
     async def _check(
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
@@ -232,8 +232,8 @@ def require_role(min_role: str = "member"):
             raise HTTPException(
                 status_code=403, detail="No team membership found for this account"
             )
-        user_level = role_order.get(membership.role, 0)
-        required_level = role_order.get(min_role, 1)
+        user_level = ROLE_ORDER.get(membership.role, 0)
+        required_level = ROLE_ORDER.get(min_role, 1)
         if user_level < required_level:
             raise HTTPException(
                 status_code=403, detail=f"Requires '{min_role}' role or higher"
@@ -241,6 +241,52 @@ def require_role(min_role: str = "member"):
         return user
 
     return _check
+
+
+async def get_org_for_user(
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+    min_role: str = "viewer",
+) -> tuple[Organization, TeamMember]:
+    """Return org + membership if user has access, else raise 403."""
+    result = await db.execute(
+        select(Organization, TeamMember)
+        .join(Team, Team.org_id == Organization.id)
+        .join(TeamMember, TeamMember.team_id == Team.id)
+        .where(Organization.id == org_id, TeamMember.user_id == user_id)
+        .limit(1)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=403, detail="Access denied")
+    org, membership = row
+    if ROLE_ORDER.get(membership.role, 0) < ROLE_ORDER.get(min_role, 0):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    return org, membership
+
+
+async def get_project_for_user(
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+    min_role: str = "viewer",
+) -> tuple[Project, TeamMember]:
+    """Return project + membership if user has access, else raise 403."""
+    result = await db.execute(
+        select(Project, TeamMember)
+        .join(Team, Team.id == Project.team_id)
+        .join(TeamMember, TeamMember.team_id == Team.id)
+        .where(Project.id == project_id, TeamMember.user_id == user_id)
+        .limit(1)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=403, detail="Access denied")
+    project, membership = row
+    if ROLE_ORDER.get(membership.role, 0) < ROLE_ORDER.get(min_role, 0):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    return project, membership
 
 
 # ── Registration & Login Handlers ────────────────────────────────────────

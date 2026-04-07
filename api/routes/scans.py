@@ -10,7 +10,6 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     Query,
     HTTPException,
@@ -24,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from api.auth import get_current_user, get_current_user_optional
+from api.auth import get_project_for_user
 from database import get_db
 from models.db_models import Scan, Project, User, TeamMember, Team, Subscription
 from services.audit import log_action
@@ -118,7 +118,6 @@ async def check_scan_quota(org_id: UUID, db: AsyncSession) -> None:
 @limiter.limit("5/minute")
 async def create_scan(
     request: Request,
-    background_tasks: BackgroundTasks,
     req: CreateScanRequest,
     user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
@@ -145,6 +144,15 @@ async def create_scan(
     if req.project_id:
         # Explicit project_id always takes priority
         project_id = _parse_scan_uuid(req.project_id)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required when using project_id.",
+            )
+        project, membership = await get_project_for_user(project_id, user.id, db)
+        team = (await db.execute(select(Team).where(Team.id == project.team_id))).scalar_one()
+        org_id = team.org_id
+        await check_scan_quota(org_id, db)
 
     elif membership:
         # Derive org / create implicit project when the user belongs to a team
@@ -207,10 +215,10 @@ async def create_scan(
     # (background task uses SyncSession and reads DB immediately)
     await db.commit()
 
-    # Enqueue scan as FastAPI background task (no Celery needed)
-    from workers.tasks import run_scan_task
+    # Enqueue scan as durable Celery task
+    from workers.tasks import run_scan_analysis
 
-    background_tasks.add_task(run_scan_task, scan_id, req.repo_url, req.branch)
+    run_scan_analysis.delay(scan_id, req.repo_url, req.branch)
 
     return {
         "scan_id": scan_id,
@@ -327,7 +335,7 @@ async def list_pull_requests(
 @router.get("/{scan_id}")
 async def get_scan(
     scan_id: str,
-    user: User = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get full scan results by ID."""
@@ -339,6 +347,9 @@ async def get_scan(
 
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
+    if not scan.project_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    await get_project_for_user(scan.project_id, user.id, db)
 
     return {
         "id": str(scan.id),
@@ -381,6 +392,9 @@ async def get_scan_report(
     scan = result.scalar_one_or_none()
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
+    if not scan.project_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    await get_project_for_user(scan.project_id, user.id, db)
     if scan.status != "completed":
         raise HTTPException(
             status_code=400,
@@ -461,6 +475,9 @@ async def create_fix_pr(
         raise HTTPException(status_code=404, detail="Scan not found")
     if scan.status != "completed":
         raise HTTPException(status_code=400, detail="Scan not completed yet")
+    if not scan.project_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    await get_project_for_user(scan.project_id, user.id, db, min_role="member")
 
     # ── Phase 4.3: Enforce auto-PR plan gate ────────────────────────────
     membership = (

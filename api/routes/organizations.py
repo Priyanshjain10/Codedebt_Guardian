@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from api.auth import get_current_user
+from api.auth import get_org_for_user
 from database import get_db
 from models.db_models import Organization, Team, TeamMember, User
 
@@ -64,12 +65,11 @@ async def get_organization(
     db: AsyncSession = Depends(get_db),
 ):
     """Get organization details."""
-    result = await db.execute(
-        select(Organization).where(Organization.id == uuid.UUID(org_id))
-    )
-    org = result.scalar_one_or_none()
-    if not org:
+    try:
+        org_uuid = uuid.UUID(org_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Organization not found")
+    org, _ = await get_org_for_user(org_uuid, user.id, db)
 
     return {
         "id": str(org.id),
@@ -88,10 +88,15 @@ async def list_teams(
     db: AsyncSession = Depends(get_db),
 ):
     """List teams in an organization."""
+    try:
+        org_uuid = uuid.UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    await get_org_for_user(org_uuid, user.id, db)
     result = await db.execute(
         select(Team)
         .options(selectinload(Team.members))
-        .where(Team.org_id == uuid.UUID(org_id))
+        .where(Team.org_id == org_uuid)
     )
     teams = result.scalars().all()
 
@@ -117,10 +122,21 @@ async def list_team_members(
     db: AsyncSession = Depends(get_db),
 ):
     """List members of a team."""
+    try:
+        org_uuid = uuid.UUID(org_id)
+        team_uuid = uuid.UUID(team_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Team not found")
+    await get_org_for_user(org_uuid, user.id, db)
+    team = (
+        await db.execute(select(Team).where(Team.id == team_uuid, Team.org_id == org_uuid))
+    ).scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
     result = await db.execute(
         select(TeamMember)
         .options(selectinload(TeamMember.user))
-        .where(TeamMember.team_id == uuid.UUID(team_id))
+        .where(TeamMember.team_id == team_uuid)
     )
     members = result.scalars().all()
 
@@ -153,6 +169,18 @@ async def add_team_member(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a member to a team by email."""
+    try:
+        org_uuid = uuid.UUID(org_id)
+        team_uuid = uuid.UUID(team_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Team not found")
+    await get_org_for_user(org_uuid, user.id, db, min_role="admin")
+    team = (
+        await db.execute(select(Team).where(Team.id == team_uuid, Team.org_id == org_uuid))
+    ).scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
     # Find user by email
     result = await db.execute(select(User).where(User.email == req.email))
     target_user = result.scalar_one_or_none()
@@ -162,7 +190,7 @@ async def add_team_member(
     # Check if already a member
     existing = await db.execute(
         select(TeamMember).where(
-            TeamMember.team_id == uuid.UUID(team_id),
+            TeamMember.team_id == team_uuid,
             TeamMember.user_id == target_user.id,
         )
     )
@@ -170,7 +198,7 @@ async def add_team_member(
         raise HTTPException(status_code=409, detail="User is already a team member")
 
     member = TeamMember(
-        team_id=uuid.UUID(team_id),
+        team_id=team_uuid,
         user_id=target_user.id,
         role=req.role,
     )

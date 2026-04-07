@@ -44,13 +44,7 @@ export default function BillingPage() {
     const handleUpgrade = async (plan: string) => {
         setUpgrading(plan);
         try {
-            // We need an org_id. Get it from the user's organizations.
-            const { request } = await import('@/lib/api/client');
-            const orgs = await request<{ organizations: { id: string }[] }>('/api/v1/organizations');
-            const orgId = orgs.organizations?.[0]?.id;
-            if (!orgId) { toast.error('No organization found'); return; }
-
-            const result = await billingApi.createCheckout(plan, orgId);
+            const result = await billingApi.createCheckout(plan);
             window.open(result.checkout_url, '_blank');
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Checkout failed');
