@@ -8,7 +8,7 @@ import json
 import logging
 import time
 import uuid
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from datetime import datetime, timezone
 from typing import Any, Dict
 import os
@@ -145,8 +145,11 @@ def run_scan_analysis(self, scan_id: str, repo_url: str, branch: str = "main"):
                 .outerjoin(Project, Project.id == Scan.project_id)
                 .where(
                     or_(
-                        Project.repo_url == repo_url,
-                        Scan.detection_results["repo_url"].astext == repo_url,
+                        and_(Project.id.is_not(None), Project.repo_url == repo_url),
+                        and_(
+                            Scan.project_id.is_(None),
+                            Scan.detection_results["repo_url"].astext == repo_url,
+                        ),
                     )
                 )
                 .where(Scan.status == "completed")

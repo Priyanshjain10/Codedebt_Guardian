@@ -57,7 +57,7 @@ export default function BillingPage() {
     const pct = scansLimit > 0 ? Math.min((scansUsed / scansLimit) * 100, 100) : 0;
 
     const handleUpgrade = async (plan: string) => {
-        if (!selectedOrgId && hasMultipleOrganizations) {
+        if (hasMultipleOrganizations && !selectedOrgId) {
             toast.error('Please select an organization before upgrading');
             return;
         }
@@ -159,7 +159,7 @@ export default function BillingPage() {
                             ) : (
                                 <button
                                     onClick={() => handleUpgrade(plan.id)}
-                                    disabled={upgrading === plan.id}
+                                    disabled={upgrading === plan.id || (hasMultipleOrganizations && !selectedOrgId)}
                                     className="h-9 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand-light transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                                 >
                                     {upgrading === plan.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
