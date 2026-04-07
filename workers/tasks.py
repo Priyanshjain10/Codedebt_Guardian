@@ -8,7 +8,7 @@ import json
 import logging
 import time
 import uuid
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from datetime import datetime, timezone
 from typing import Any, Dict
 import os
@@ -142,8 +142,13 @@ def run_scan_analysis(self, scan_id: str, repo_url: str, branch: str = "main"):
             # Find previous successful scan for this repo
             prev_scan = db.execute(
                 select(Scan)
-                .join(Project, Project.id == Scan.project_id)
-                .where(Project.repo_url == repo_url)
+                .outerjoin(Project, Project.id == Scan.project_id)
+                .where(
+                    or_(
+                        Project.repo_url == repo_url,
+                        Scan.detection_results["repo_url"].astext == repo_url,
+                    )
+                )
                 .where(Scan.status == "completed")
                 .where(Scan.id != scan_uuid)
                 .where(Scan.commit_sha.is_not(None))

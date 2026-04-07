@@ -17,7 +17,7 @@ from jose import JWTError, jwt
 from config import settings
 from database import AsyncSessionLocal
 from sqlalchemy import select
-from models.db_models import Scan, TeamMember, Project
+from models.db_models import Scan, Team, TeamMember, Project
 
 logger = logging.getLogger(__name__)
 

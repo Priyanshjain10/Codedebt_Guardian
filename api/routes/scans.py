@@ -59,6 +59,15 @@ def _parse_scan_uuid(scan_id: str) -> UUID:
         raise HTTPException(status_code=404, detail="Scan not found")
 
 
+async def _authorize_scan_read_access(scan: Scan, user: User, db: AsyncSession) -> None:
+    """Authorize scan read access, including legacy scans without project links."""
+    if scan.project_id:
+        await get_project_for_user(scan.project_id, user.id, db)
+        return
+    if scan.triggered_by != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 # ── Request / Response Models ─────────────────────────────────────────────
 
 
@@ -347,9 +356,7 @@ async def get_scan(
 
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
-    if not scan.project_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    await get_project_for_user(scan.project_id, user.id, db)
+    await _authorize_scan_read_access(scan, user, db)
 
     return {
         "id": str(scan.id),
@@ -392,9 +399,7 @@ async def get_scan_report(
     scan = result.scalar_one_or_none()
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
-    if not scan.project_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    await get_project_for_user(scan.project_id, user.id, db)
+    await _authorize_scan_read_access(scan, user, db)
     if scan.status != "completed":
         raise HTTPException(
             status_code=400,

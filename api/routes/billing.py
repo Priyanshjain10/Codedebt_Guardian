@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user
 from config import settings
 from database import get_db
-from models.db_models import Subscription, TeamMember, User
+from models.db_models import Subscription, Team, TeamMember, User
 from services.audit import log_action
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,6 @@ async def create_checkout_session(
     ).scalars().all()
     if not membership:
         raise HTTPException(status_code=400, detail="No organization found")
-
-    from models.db_models import Team
 
     if req.org_id:
         try:
@@ -141,8 +139,6 @@ async def create_portal_session(
     ).scalar_one_or_none()
     if not membership:
         raise HTTPException(status_code=404, detail="No organization found")
-
-    from models.db_models import Team
 
     team = (
         await db.execute(select(Team).where(Team.id == membership.team_id))
@@ -315,8 +311,6 @@ async def get_usage(
     ).scalar_one_or_none()
     if not membership:
         return {"plan": "free", "usage": {}}
-
-    from models.db_models import Team
 
     team = (
         await db.execute(select(Team).where(Team.id == membership.team_id))

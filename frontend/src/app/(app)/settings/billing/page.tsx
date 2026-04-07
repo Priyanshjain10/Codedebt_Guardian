@@ -1,13 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CreditCard, Check, ArrowUpRight, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Check, ArrowUpRight, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import * as billingApi from '@/lib/api/billing';
+import { getOrganizations } from '@/lib/api/organizations';
 import { cn } from '@/lib/utils/cn';
-import { useAuthStore } from '@/store/authStore';
 
 const PLANS = [
     {
@@ -29,12 +29,27 @@ const PLANS = [
 
 export default function BillingPage() {
     const [upgrading, setUpgrading] = useState<string | null>(null);
+    const [selectedOrgId, setSelectedOrgId] = useState<string>('');
 
     const { data: usage } = useQuery({
         queryKey: ['billing', 'usage'],
         queryFn: () => billingApi.getUsage(),
         staleTime: 60_000,
     });
+    const { data: orgsData } = useQuery({
+        queryKey: ['organizations'],
+        queryFn: () => getOrganizations(),
+        staleTime: 60_000,
+    });
+
+    const organizations = orgsData?.organizations ?? [];
+    const hasMultipleOrganizations = organizations.length > 1;
+
+    useEffect(() => {
+        if (!selectedOrgId && organizations.length > 0) {
+            setSelectedOrgId(organizations[0].id);
+        }
+    }, [organizations, selectedOrgId]);
 
     const currentPlan = usage?.plan ?? 'free';
     const scansUsed = usage?.scans_used ?? 0;
@@ -42,9 +57,13 @@ export default function BillingPage() {
     const pct = scansLimit > 0 ? Math.min((scansUsed / scansLimit) * 100, 100) : 0;
 
     const handleUpgrade = async (plan: string) => {
+        if (!selectedOrgId && hasMultipleOrganizations) {
+            toast.error('Please select an organization before upgrading');
+            return;
+        }
         setUpgrading(plan);
         try {
-            const result = await billingApi.createCheckout(plan);
+            const result = await billingApi.createCheckout(plan, selectedOrgId || undefined);
             window.open(result.checkout_url, '_blank');
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Checkout failed');
@@ -76,6 +95,26 @@ export default function BillingPage() {
                     <p className="text-[10px] text-text-3 mt-2">Resets: {new Date(usage.period_end).toLocaleDateString()}</p>
                 )}
             </div>
+
+            {organizations.length > 0 && (
+                <div className="bg-bg-card border border-border rounded-xl p-5 space-y-2">
+                    <label htmlFor="billing-org" className="text-[10px] font-bold tracking-wider uppercase text-text-3">
+                        Billing Organization
+                    </label>
+                    <select
+                        id="billing-org"
+                        value={selectedOrgId}
+                        onChange={(e) => setSelectedOrgId(e.target.value)}
+                        className="w-full h-9 rounded-lg bg-bg-card-2 border border-border px-3 text-sm text-text-1"
+                    >
+                        {organizations.map((org) => (
+                            <option key={org.id} value={org.id}>
+                                {org.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             {/* Plan comparison */}
             <div className="grid grid-cols-3 gap-4">
